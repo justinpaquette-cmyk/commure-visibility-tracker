@@ -1,0 +1,22 @@
+{
+  "scan_root": "/path/to/your/projects",
+  "lookback_hours": 24,
+  "file_extensions": [".py", ".ts", ".tsx", ".js", ".jsx", ".md", ".json", ".yaml", ".yml", ".sql", ".sh"],
+  "excluded_patterns": [
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    ".next",
+    ".cache"
+  ],
+  "notion": {
+    "api_key": "",
+    "page_id": ""
+  },
+  "stale_threshold_days": 7,
+  "confidence_threshold": 0.5
+}

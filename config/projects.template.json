@@ -1,0 +1,27 @@
+{
+  "projects": [
+    {
+      "id": "example-project",
+      "name": "Example Project",
+      "team": "Team A",
+      "folder_path": "/path/to/your/project",
+      "privacy": "public",
+      "themes": []
+    }
+  ],
+  "teams": [
+    {
+      "id": "team_a",
+      "name": "Team A",
+      "lead": ""
+    },
+    {
+      "id": "team_b",
+      "name": "Team B",
+      "lead": ""
+    }
+  ],
+  "excluded_folders": [
+    "/path/to/personal/folder"
+  ]
+}
