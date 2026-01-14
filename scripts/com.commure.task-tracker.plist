@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.commure.task-tracker</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/justinpaquette/Documents/sales eng projects v2/productivity/commure-task-tracker/scripts/daily-recap.sh</string>
+    </array>
+
+    <!-- Run at 6 PM every day -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>18</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/justinpaquette/Documents/sales eng projects v2/productivity/commure-task-tracker/data/recaps/cron.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/justinpaquette/Documents/sales eng projects v2/productivity/commure-task-tracker/data/recaps/cron.log</string>
+</dict>
+</plist>
