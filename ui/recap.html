@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Recap</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 24px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .header .date {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        .section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .team-distribution {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .team-bar {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--border);
+            overflow: hidden;
+        }
+
+        .team-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .team-bar-fill.team-a {
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        }
+
+        .team-bar-fill.team-b {
+            background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+        }
+
+        .team-legend {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .team-legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .team-legend .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .theme-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .theme-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+        }
+
+        .theme-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .theme-status.active { background: var(--success); }
+        .theme-status.blocked { background: var(--danger); }
+        .theme-status.planned { background: var(--text-muted); border: 2px solid var(--text-muted); background: transparent; }
+        .theme-status.complete { background: var(--accent); }
+
+        .theme-info {
+            flex: 1;
+        }
+
+        .theme-name {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .theme-project {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .theme-count {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .source-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .source-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+
+        .source-pill .count {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .claude-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .claude-stat {
+            text-align: center;
+            padding: 12px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 8px;
+        }
+
+        .claude-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #a78bfa;
+        }
+
+        .claude-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .footer {
+            text-align: center;
+            padding-top: 24px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Print/screenshot optimizations */
+        @media print {
+            body { background: white; color: #1e293b; }
+            .stat-card, .section { border-color: #e2e8f0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Daily Recap</h1>
+            <div class="date" id="recap-date">January 14, 2026</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-activities">42</div>
+                <div class="stat-label">Activities</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="projects-touched">5</div>
+                <div class="stat-label">Projects</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="claude-sessions">7</div>
+                <div class="stat-label">AI Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="files-edited">67</div>
+                <div class="stat-label">Files Edited</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Team Distribution</div>
+            <div class="team-distribution">
+                <div class="team-bar">
+                    <div class="team-bar-fill team-a" id="team-a-bar" style="width: 81%"></div>
+                </div>
+            </div>
+            <div class="team-legend">
+                <span><span class="dot" style="background: #3b82f6"></span> Sales Engineering <strong id="team-a-pct">81%</strong></span>
+                <span><span class="dot" style="background: #8b5cf6"></span> Product Management <strong id="team-b-pct">19%</strong></span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Active Themes</div>
+            <div class="theme-list" id="theme-list">
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">Pre-Encounter AI Agent</div>
+                        <div class="theme-project">Conifer Tenet VBC</div>
+                    </div>
+                    <div class="theme-count">9 activities</div>
+                </div>
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">All-in-One Mock EHR Platform</div>
+                        <div class="theme-project">Mock EHRs</div>
+                    </div>
+                    <div class="theme-count">5 activities</div>
+                </div>
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">Ambient Demo Environment</div>
+                        <div class="theme-project">Ambient Demos</div>
+                    </div>
+                    <div class="theme-count">8 activities</div>
+                </div>
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">MVP Build</div>
+                        <div class="theme-project">Task Tracker</div>
+                    </div>
+                    <div class="theme-count">6 activities</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Activity Sources</div>
+            <div class="source-pills">
+                <div class="source-pill">
+                    <span>Claude Code</span>
+                    <span class="count" id="source-claude">11</span>
+                </div>
+                <div class="source-pill">
+                    <span>File Changes</span>
+                    <span class="count" id="source-fs">27</span>
+                </div>
+                <div class="source-pill">
+                    <span>Git Commits</span>
+                    <span class="count" id="source-git">4</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Claude Code Summary</div>
+            <div class="claude-stats">
+                <div class="claude-stat">
+                    <div class="claude-stat-value" id="claude-messages">765</div>
+                    <div class="claude-stat-label">Messages</div>
+                </div>
+                <div class="claude-stat">
+                    <div class="claude-stat-value" id="claude-tools">524</div>
+                    <div class="claude-stat-label">Tool Uses</div>
+                </div>
+                <div class="claude-stat">
+                    <div class="claude-stat-value" id="claude-files">67</div>
+                    <div class="claude-stat-label">Files Touched</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            Generated by Commure Visibility Tracker
+        </div>
+    </div>
+
+    <script>
+        // This script loads data from recap.json if present
+        // For static screenshots, the HTML above can be edited directly
+        async function loadRecapData() {
+            try {
+                const response = await fetch('recap-data.json');
+                if (!response.ok) return;
+                const data = await response.json();
+
+                // Update stats
+                if (data.total_activities) document.getElementById('total-activities').textContent = data.total_activities;
+                if (data.projects_touched) document.getElementById('projects-touched').textContent = data.projects_touched;
+                if (data.claude_sessions) document.getElementById('claude-sessions').textContent = data.claude_sessions;
+                if (data.files_edited) document.getElementById('files-edited').textContent = data.files_edited;
+                if (data.date) document.getElementById('recap-date').textContent = data.date;
+
+                // Update team distribution
+                if (data.team_a_pct) {
+                    document.getElementById('team-a-bar').style.width = data.team_a_pct + '%';
+                    document.getElementById('team-a-pct').textContent = data.team_a_pct + '%';
+                    document.getElementById('team-b-pct').textContent = (100 - data.team_a_pct) + '%';
+                }
+
+                // Update themes
+                if (data.themes && data.themes.length > 0) {
+                    const themeList = document.getElementById('theme-list');
+                    themeList.innerHTML = data.themes.map(t => `
+                        <div class="theme-item">
+                            <div class="theme-status ${t.status}"></div>
+                            <div class="theme-info">
+                                <div class="theme-name">${t.name}</div>
+                                <div class="theme-project">${t.project}</div>
+                            </div>
+                            <div class="theme-count">${t.count} activities</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.log('Using static data');
+            }
+        }
+        loadRecapData();
+    </script>
+</body>
+</html>
