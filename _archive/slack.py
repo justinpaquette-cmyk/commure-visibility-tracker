@@ -4,6 +4,8 @@ Imports action items from Slack via:
 1. Manual paste (no setup required)
 2. File import (export from Slack)
 3. API (requires Slack app setup - future)
+
+Includes intelligent project inference from content and channels.
 """
 
 import json
@@ -11,11 +13,95 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import Activity, ActivitySource
+
+
+def load_projects_config() -> Dict[str, Any]:
+    """Load projects configuration."""
+    config_path = Path(__file__).parent.parent / "config" / "projects.json"
+    if config_path.exists():
+        with open(config_path) as f:
+            return json.load(f)
+    return {"projects": []}
+
+
+def infer_project_from_content(
+    text: str,
+    channels: List[str],
+    projects_config: Dict[str, Any] = None
+) -> Optional[str]:
+    """
+    Infer project from Slack content and channels.
+
+    Uses multiple signals:
+    1. Slack channel mappings (highest confidence)
+    2. Partial channel matching (e.g., "compassus-835-client" matches "compassus")
+    3. Project name/alias mentions in text
+    4. Client name mentions
+
+    Args:
+        text: The action item text
+        channels: List of #channels mentioned
+        projects_config: Projects configuration (loaded if not provided)
+
+    Returns:
+        Project name or None if no match found (allows matcher to recategorize)
+    """
+    if projects_config is None:
+        projects_config = load_projects_config()
+
+    projects = projects_config.get("projects", [])
+    text_lower = text.lower()
+
+    # Build lookup structures
+    channel_to_project = {}
+    alias_to_project = {}
+    name_to_project = {}
+
+    for project in projects:
+        project_name = project.get("name", "")
+
+        # Map channels to project
+        for channel in project.get("slack_channels", []):
+            channel_to_project[channel.lower().strip('#')] = project_name
+
+        # Map aliases to project
+        for alias in project.get("aliases", []):
+            alias_to_project[alias.lower()] = project_name
+
+        # Map project name and ID
+        name_to_project[project_name.lower()] = project_name
+        name_to_project[project.get("id", "").lower()] = project_name
+
+    # Signal 1: Exact channel mapping (highest confidence)
+    for channel in channels:
+        channel_clean = channel.lower().strip('#')
+        if channel_clean in channel_to_project:
+            return channel_to_project[channel_clean]
+
+    # Signal 2: Partial channel matching (e.g., "compassus-835-client" matches "compassus")
+    for channel in channels:
+        channel_clean = channel.lower().strip('#')
+        for config_channel, project_name in channel_to_project.items():
+            if channel_clean.startswith(config_channel) or config_channel.startswith(channel_clean):
+                return project_name
+
+    # Signal 3: Alias matching in text
+    for alias, project_name in alias_to_project.items():
+        if alias in text_lower:
+            return project_name
+
+    # Signal 4: Project name matching in text
+    for name, project_name in name_to_project.items():
+        if name and len(name) > 2 and name in text_lower:
+            return project_name
+
+    # Return None to let the matcher try other signals
+    return None
 
 
 def parse_slack_action_items(text: str) -> List[dict]:
@@ -96,13 +182,13 @@ def parse_slack_action_items(text: str) -> List[dict]:
     return items
 
 
-def import_from_paste(paste_text: str, project_name: str = "Slack") -> List[Activity]:
+def import_from_paste(paste_text: str, project_name: str = None) -> List[Activity]:
     """
     Import action items from pasted text.
 
     Args:
         paste_text: Text copied from Slack
-        project_name: Project to associate with (optional)
+        project_name: Project to associate with (auto-inferred if not provided)
 
     Returns:
         List of Activity objects
@@ -112,21 +198,39 @@ def import_from_paste(paste_text: str, project_name: str = "Slack") -> List[Acti
 
     now = datetime.now()
 
+    # Load projects config once for inference
+    projects_config = load_projects_config() if project_name is None else None
+
     for i, item in enumerate(items):
         if item['is_complete']:
             continue  # Skip completed items
+
+        # Infer project if not explicitly provided
+        if project_name is None:
+            inferred_project = infer_project_from_content(
+                item['raw_text'],
+                item['channels'],
+                projects_config
+            )
+        else:
+            inferred_project = project_name
+
+        # Lower confidence if we couldn't infer a project
+        # This allows the matcher to potentially recategorize using other signals
+        confidence = 0.9 if inferred_project else 0.5
 
         activity = Activity(
             source=ActivitySource.SLACK,
             timestamp=now,
             description=f"[Slack] {item['text']}",
-            confidence=0.9,
+            confidence=confidence,
             raw_data={
                 'raw_text': item['raw_text'],
                 'mentions': item['mentions'],
                 'channels': item['channels'],
-                'project': project_name,
+                'project': inferred_project,  # Can be None, matcher will try other signals
                 'type': 'action_item',
+                'needs_categorization': inferred_project is None,
             },
         )
         activities.append(activity)

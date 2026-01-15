@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Report - Jan 12 to Jan 14, 2026</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --card: #f8fafc;
+            --border: #e2e8f0;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --accent: #3b82f6;
+            --success: #22c55e;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .header h1 {
+            font-size: 1.75rem;
+            margin-bottom: 8px;
+        }
+
+        .header .date-range {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section h2 {
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .wins-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .win-item {
+            padding: 12px;
+            background: rgba(34, 197, 94, 0.05);
+            border-left: 3px solid var(--success);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .win-category {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            background: var(--success);
+            color: white;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+
+        .win-summary {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .win-project {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .team-bar {
+            display: flex;
+            height: 24px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .team-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .team-segment:first-child { background: #3b82f6; }
+        .team-segment:nth-child(2) { background: #8b5cf6; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .theme-group {
+            margin-bottom: 16px;
+        }
+
+        .theme-group h4 {
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+
+        .theme-group ul {
+            margin-left: 20px;
+            color: var(--text-muted);
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .accomplishments-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .accomplishment-item {
+            padding: 12px 16px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.02));
+            border-left: 3px solid var(--success);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .accomplishment-text {
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .accomplishment-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 0.8rem;
+        }
+
+        .accomplishment-project {
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .accomplishment-files {
+            color: var(--text-muted);
+        }
+
+        .accomplishment-category {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .ai-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: white;
+            border-radius: 4px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @media print {
+            body { padding: 20px; }
+            .section { break-inside: avoid; }
+        }
+
+        @media (max-width: 600px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Weekly Activity Report</h1>
+            <div class="date-range">January 12 - January 14, 2026</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value">71</div>
+                <div class="stat-label">Activities</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">5</div>
+                <div class="stat-label">Projects</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">8</div>
+                <div class="stat-label">AI Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">100</div>
+                <div class="stat-label">Files Edited</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Team Distribution</h2>
+            <div class="team-bar">
+                <div class="team-segment" style="width: 73%">Sales Engineering 73%</div><div class="team-segment" style="width: 27%">Product Management 27%</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Project Activity</h2>
+            <table>
+                <thead>
+                    <tr><th>Project</th><th>Activities</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Task Tracker</td><td>12</td></tr><tr><td>TTS Generator</td><td>9</td></tr><tr><td>Conifer Tenet VBC</td><td>9</td></tr><tr><td>Ambient Demos</td><td>8</td></tr><tr><td>Mock EHRs</td><td>6</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Active Themes</h2>
+            
+            <div class="theme-group">
+                <h4>Compassus 835 Automation</h4>
+                <ul><li>Client Folder Compassus</li></ul>
+            </div>
+            
+            <div class="theme-group">
+                <h4>Conifer Tenet VBC</h4>
+                <ul><li>Pre-Encounter AI Agent</li><li>Tenet Conifer Client</li><li>Tenet Conifer Test</li></ul>
+            </div>
+            
+            <div class="theme-group">
+                <h4>Mock EHRs</h4>
+                <ul><li>All-in-One Mock EHR Platform</li><li>Mock Ehrs One</li></ul>
+            </div>
+            
+            <div class="theme-group">
+                <h4>TTS Generator</h4>
+                <ul><li>Multi-Speaker TTS</li><li>Tts Generator Client</li></ul>
+            </div>
+            
+            <div class="theme-group">
+                <h4>Ambient Demos</h4>
+                <ul><li>Ambient Demo Environment</li><li>Client Agnostic Ambient</li></ul>
+            </div>
+            
+            <div class="theme-group">
+                <h4>Task Tracker</h4>
+                <ul><li>MVP Build</li><li>Task Tracker Productivity</li></ul>
+            </div>
+            
+        </div>
+
+        
+        <div class="section accomplishments-section">
+            <h2>Key Accomplishments <span class="ai-badge">AI Enhanced</span></h2>
+            <div class="accomplishments-list">
+            <div class="accomplishment-item">
+                <div class="accomplishment-text">Built personal productivity tracking system with automated activity collection and visual dashboards</div>
+                <div class="accomplishment-meta"><span class="accomplishment-project">Task Tracker</span> <span class="accomplishment-category">Feature</span></div>
+            </div>
+            
+            <div class="accomplishment-item">
+                <div class="accomplishment-text">Shipped multi-speaker TTS tool with audiobook mode, web GUI, and comprehensive test coverage</div>
+                <div class="accomplishment-meta"><span class="accomplishment-project">TTS Generator</span> <span class="accomplishment-category">Feature</span></div>
+            </div>
+            
+            <div class="accomplishment-item">
+                <div class="accomplishment-text">Developed AI-powered intake agent with iterative prompt engineering and demo test scripts</div>
+                <div class="accomplishment-meta"><span class="accomplishment-project">Conifer Tenet VBC</span> <span class="accomplishment-category">Integration</span></div>
+            </div>
+            
+            <div class="accomplishment-item">
+                <div class="accomplishment-text">Added MEDITECH Expanse skin to support Search & Summarization demo scenarios</div>
+                <div class="accomplishment-meta"><span class="accomplishment-project">Mock EHRs</span> <span class="accomplishment-category">Feature</span></div>
+            </div>
+            
+            <div class="accomplishment-item">
+                <div class="accomplishment-text">Enhanced client-agnostic ambient demo environment with improved UI components</div>
+                <div class="accomplishment-meta"><span class="accomplishment-project">Ambient Demos</span> <span class="accomplishment-category">Infrastructure</span></div>
+            </div>
+            </div>
+        </div>
+        
+
+        <div class="footer">
+            Generated by Task Tracker on 2026-01-14 15:04
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "thresholds": {
+    "significant_session_files": 5,
+    "sustained_effort_files": 10,
+    "significant_tasks": 3,
+    "daily_session_files": 3,
+    "daily_effort_files": 5
+  },
+  "keyword_tiers": {
+    "high_impact": ["ship", "launch", "deploy", "complete", "finish", "release", "delivered", "published"],
+    "medium_impact": ["implement", "build", "create", "fix", "solve", "resolve", "integrate"],
+    "low_impact": ["add", "update", "modify", "refactor", "clean", "adjust", "tweak"]
+  },
+  "categories": [
+    {
+      "id": "launch",
+      "name": "Launch | Release",
+      "keywords": ["ship", "launch", "deploy", "release", "publish", "go live"],
+      "priority": 1
+    },
+    {
+      "id": "feature",
+      "name": "Feature Development",
+      "keywords": ["implement", "build", "create", "feature", "new functionality"],
+      "priority": 2
+    },
+    {
+      "id": "demo",
+      "name": "Demo | POC",
+      "keywords": ["demo", "poc", "proof of concept", "prototype", "showcase"],
+      "priority": 3
+    },
+    {
+      "id": "integration",
+      "name": "Integration",
+      "keywords": ["integrate", "connect", "api", "webhook", "sync"],
+      "priority": 4
+    },
+    {
+      "id": "fix",
+      "name": "Bug Fix | Resolution",
+      "keywords": ["fix", "bug", "resolve", "patch", "hotfix", "issue"],
+      "priority": 5
+    },
+    {
+      "id": "testing",
+      "name": "Testing | QA",
+      "keywords": ["test", "qa", "verify", "validate", "coverage"],
+      "priority": 6
+    },
+    {
+      "id": "docs",
+      "name": "Documentation",
+      "keywords": ["doc", "readme", "guide", "tutorial", "documentation"],
+      "priority": 7
+    },
+    {
+      "id": "infra",
+      "name": "Infrastructure",
+      "keywords": ["infra", "ci", "cd", "pipeline", "devops", "config"],
+      "priority": 8
+    },
+    {
+      "id": "refactor",
+      "name": "Refactoring | Cleanup",
+      "keywords": ["refactor", "clean", "optimize", "improve", "restructure"],
+      "priority": 9
+    },
+    {
+      "id": "development",
+      "name": "Development",
+      "keywords": [],
+      "priority": 10
+    }
+  ],
+  "daily_wins_enabled": true,
+  "min_confidence": 0.5,
+  "max_wins_per_day": 5,
+  "max_wins_per_project": 3
+}

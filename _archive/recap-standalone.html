@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Recap</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 24px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .header .date {
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
+        .section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--accent);
+            border-radius: 2px;
+        }
+
+        .team-distribution {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .team-bar {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--border);
+            overflow: hidden;
+        }
+
+        .team-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .team-bar-fill.team-a {
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        }
+
+        .team-bar-fill.team-b {
+            background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+        }
+
+        .team-legend {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .team-legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .team-legend .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .theme-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .theme-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+        }
+
+        .theme-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .theme-status.active { background: var(--success); }
+        .theme-status.blocked { background: var(--danger); }
+        .theme-status.planned { background: var(--text-muted); border: 2px solid var(--text-muted); background: transparent; }
+        .theme-status.complete { background: var(--accent); }
+
+        .theme-info {
+            flex: 1;
+        }
+
+        .theme-name {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .theme-project {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .theme-count {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .source-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .source-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+
+        .source-pill .count {
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .claude-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .claude-stat {
+            text-align: center;
+            padding: 12px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 8px;
+        }
+
+        .claude-stat-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #a78bfa;
+        }
+
+        .claude-stat-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .trends-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .sparkline {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 40px;
+        }
+
+        .sparkline-bar {
+            width: 12px;
+            background: linear-gradient(180deg, #3b82f6, #1e40af);
+            border-radius: 2px;
+            min-height: 4px;
+        }
+
+        .trend-delta {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .trend-delta.positive {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+        }
+
+        .trend-delta.negative {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+
+        .trend-delta.neutral {
+            background: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+        }
+
+        .trend-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .view-selector {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .view-btn:hover {
+            border-color: var(--accent);
+            color: var(--text);
+        }
+
+        .view-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .footer {
+            text-align: center;
+            padding-top: 24px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        /* Wins section */
+        .wins-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .win-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px;
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(34, 197, 94, 0.02));
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 10px;
+        }
+
+        .win-icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(34, 197, 94, 0.15);
+            border-radius: 8px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .win-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .win-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .win-category {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+            border-radius: 4px;
+        }
+
+        .win-confidence {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .win-summary {
+            font-size: 0.9rem;
+            color: var(--text);
+            line-height: 1.4;
+            margin-bottom: 4px;
+        }
+
+        .win-project {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .no-wins {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* Print/screenshot optimizations */
+        @media print {
+            body { background: white; color: #1e293b; }
+            .stat-card, .section { border-color: #e2e8f0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Activity Recap</h1>
+            <div class="date" id="recap-date">January 14, 2026</div>
+        </div>
+
+        <div class="view-selector">
+            <button class="view-btn active" data-view="today">Today</button>
+            <button class="view-btn" data-view="week">This Week</button>
+            <button class="view-btn" data-view="month">This Month</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-activities">42</div>
+                <div class="stat-label">Activities</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="projects-touched">5</div>
+                <div class="stat-label">Projects</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="claude-sessions">7</div>
+                <div class="stat-label">AI Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="files-edited">67</div>
+                <div class="stat-label">Files Edited</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Team Distribution</div>
+            <div class="team-distribution">
+                <div class="team-bar">
+                    <div class="team-bar-fill team-a" id="team-a-bar" style="width: 81%"></div>
+                </div>
+            </div>
+            <div class="team-legend">
+                <span><span class="dot" style="background: #3b82f6"></span> Sales Engineering <strong id="team-a-pct">81%</strong></span>
+                <span><span class="dot" style="background: #8b5cf6"></span> Product Management <strong id="team-b-pct">19%</strong></span>
+            </div>
+        </div>
+
+        <div class="section" id="wins-section" style="display: none;">
+            <div class="section-title">Today's Wins</div>
+            <div class="wins-list" id="wins-list">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Active Themes</div>
+            <div class="theme-list" id="theme-list">
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">Pre-Encounter AI Agent</div>
+                        <div class="theme-project">Conifer Tenet VBC</div>
+                    </div>
+                    <div class="theme-count">9 activities</div>
+                </div>
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">All-in-One Mock EHR Platform</div>
+                        <div class="theme-project">Mock EHRs</div>
+                    </div>
+                    <div class="theme-count">5 activities</div>
+                </div>
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">Ambient Demo Environment</div>
+                        <div class="theme-project">Ambient Demos</div>
+                    </div>
+                    <div class="theme-count">8 activities</div>
+                </div>
+                <div class="theme-item">
+                    <div class="theme-status active"></div>
+                    <div class="theme-info">
+                        <div class="theme-name">MVP Build</div>
+                        <div class="theme-project">Task Tracker</div>
+                    </div>
+                    <div class="theme-count">6 activities</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section" id="trends-section" style="display: none;">
+            <div class="section-title">7-Day Trend</div>
+            <div class="trends-section">
+                <div class="sparkline" id="sparkline">
+                    <!-- Filled by JS -->
+                </div>
+                <div>
+                    <span class="trend-delta neutral" id="trend-delta">--</span>
+                    <div class="trend-label">vs last week</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Activity Sources</div>
+            <div class="source-pills" id="source-pills">
+                <div class="source-pill">
+                    <span>Claude Code</span>
+                    <span class="count" id="source-claude">11</span>
+                </div>
+                <div class="source-pill">
+                    <span>File Changes</span>
+                    <span class="count" id="source-fs">27</span>
+                </div>
+                <div class="source-pill">
+                    <span>Git Commits</span>
+                    <span class="count" id="source-git">4</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Claude Code Summary</div>
+            <div class="claude-stats">
+                <div class="claude-stat">
+                    <div class="claude-stat-value" id="claude-messages">765</div>
+                    <div class="claude-stat-label">Messages</div>
+                </div>
+                <div class="claude-stat">
+                    <div class="claude-stat-value" id="claude-tools">524</div>
+                    <div class="claude-stat-label">Tool Uses</div>
+                </div>
+                <div class="claude-stat">
+                    <div class="claude-stat-value" id="claude-files">67</div>
+                    <div class="claude-stat-label">Files Touched</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            Generated by Commure Visibility Tracker
+        </div>
+    </div>
+
+    <script>
+        // Embedded data (generated 2026-01-14 15:06)
+        window.RECAP_DATA = {"generated_at": "2026-01-14T15:06:55.732690", "views": {"today": {"date": "January 14, 2026", "total_activities": 64, "projects_touched": 5, "claude_sessions": 7, "files_edited": 95, "team_a_pct": 63, "team_a_name": "Sales Engineering", "team_b_name": "Product Management", "themes": [{"name": "Task Tracker Productivity", "project": "Task Tracker", "status": "active", "count": 14}, {"name": "Tts Generator Client", "project": "TTS Generator", "status": "active", "count": 9}, {"name": "Client Agnostic Ambient", "project": "Ambient Demos", "status": "active", "count": 8}, {"name": "All-in-One Mock EHR Platform", "project": "Mock EHRs", "status": "active", "count": 6}, {"name": "Tenet Conifer Test", "project": "Conifer Tenet VBC", "status": "active", "count": 1}, {"name": "Client Folder Compassus", "project": "Compassus 835 Automation", "status": "active", "count": 0}], "sources": {"claude": 14, "filesystem": 35, "git": 9, "slack": 6, "manual": 0}, "claude_messages": 1355, "claude_tools": 1231, "trends": {}, "wins": [{"project": "tracker", "summary": "Enhanced automation and integration (10 files)", "category": "Development", "confidence": 70, "signals": ["10 files edited in session"], "files_modified": 10}, {"project": "generator", "summary": "Enhanced automation and testing (10 files)", "category": "Feature Development", "confidence": 53, "signals": ["2 medium-impact keywords", "10 files modified"], "files_modified": 10}, {"project": "TTS Generator", "summary": "Initial commit: Multi-speaker TTS Generator", "category": "Bug Fix | Resolution", "confidence": 47, "signals": ["1 medium-impact keywords", "21 files modified"], "files_modified": 21}, {"project": "pk", "summary": "Enhanced automation and UI (13 files)", "category": "Demo | POC", "confidence": 40, "signals": ["17 files modified", "5 activities"], "files_modified": 17}, {"project": "Task Tracker", "summary": "Initial commit: Personal task tracking system", "category": "Infrastructure", "confidence": 40, "signals": ["10 files modified", "17 activities"], "files_modified": 10}]}, "week": {"date": "January 14, 2026", "total_activities": 102, "projects_touched": 5, "claude_sessions": 33, "files_edited": 168, "team_a_pct": 72, "team_a_name": "Sales Engineering", "team_b_name": "Product Management", "themes": [{"name": "Task Tracker Productivity", "project": "Task Tracker", "status": "active", "count": 14}, {"name": "Tenet Conifer Test", "project": "Conifer Tenet VBC", "status": "active", "count": 13}, {"name": "Tts Generator Client", "project": "TTS Generator", "status": "active", "count": 9}, {"name": "Client Agnostic Ambient", "project": "Ambient Demos", "status": "active", "count": 8}, {"name": "All-in-One Mock EHR Platform", "project": "Mock EHRs", "status": "active", "count": 6}, {"name": "Client Folder Compassus", "project": "Compassus 835 Automation", "status": "active", "count": 0}], "sources": {"claude": 40, "filesystem": 47, "git": 9, "slack": 6, "manual": 0}, "claude_messages": 1846, "claude_tools": 1573, "trends": {}, "wins": []}, "month": {"date": "January 14, 2026", "total_activities": 525, "projects_touched": 6, "claude_sessions": 388, "files_edited": 682, "team_a_pct": 81, "team_a_name": "Sales Engineering", "team_b_name": "Product Management", "themes": [{"name": "Tenet Conifer Test", "project": "Conifer Tenet VBC", "status": "active", "count": 18}, {"name": "All-in-One Mock EHR Platform", "project": "Mock EHRs", "status": "active", "count": 14}, {"name": "Task Tracker Productivity", "project": "Task Tracker", "status": "active", "count": 14}, {"name": "Client Folder Compassus", "project": "Compassus 835 Automation", "status": "active", "count": 11}, {"name": "Tts Generator Client", "project": "TTS Generator", "status": "active", "count": 9}, {"name": "Client Agnostic Ambient", "project": "Ambient Demos", "status": "active", "count": 8}], "sources": {"claude": 417, "filesystem": 83, "git": 19, "slack": 6, "manual": 0}, "claude_messages": 9806, "claude_tools": 8486, "trends": {}, "wins": []}}, "default_view": "today"};
+    </script>
+    <script>
+        // Global data store
+        let allData = null;
+        let currentView = 'today';
+
+        // View labels for the date display
+        const viewLabels = {
+            'today': 'Today',
+            'week': 'This Week',
+            'month': 'This Month'
+        };
+
+        function updateUI(data) {
+            if (!data) return;
+
+            // Update stats
+            document.getElementById('total-activities').textContent = data.total_activities || 0;
+            document.getElementById('projects-touched').textContent = data.projects_touched || 0;
+
+            // AI Sessions
+            document.getElementById('claude-sessions').textContent = data.claude_sessions || 0;
+
+            document.getElementById('files-edited').textContent = data.files_edited || 0;
+
+            // Update date with view label
+            const dateLabel = data.date || 'Unknown';
+            const viewLabel = viewLabels[currentView] || '';
+            document.getElementById('recap-date').textContent = currentView === 'today'
+                ? dateLabel
+                : `${viewLabel} - ${dateLabel}`;
+
+            // Update team distribution
+            if (data.team_a_pct !== undefined) {
+                document.getElementById('team-a-bar').style.width = data.team_a_pct + '%';
+                document.getElementById('team-a-pct').textContent = data.team_a_pct + '%';
+                document.getElementById('team-b-pct').textContent = (100 - data.team_a_pct) + '%';
+            }
+
+            // Update themes
+            const themeList = document.getElementById('theme-list');
+            if (data.themes && data.themes.length > 0) {
+                themeList.innerHTML = data.themes.map(t => `
+                    <div class="theme-item">
+                        <div class="theme-status ${t.status}"></div>
+                        <div class="theme-info">
+                            <div class="theme-name">${t.name}</div>
+                            <div class="theme-project">${t.project}</div>
+                        </div>
+                        <div class="theme-count">${t.count} activities</div>
+                    </div>
+                `).join('');
+            } else {
+                themeList.innerHTML = '<div class="theme-item"><div class="theme-info"><div class="theme-name">No theme activity</div></div></div>';
+            }
+
+            // Update sources
+            if (data.sources) {
+                document.getElementById('source-claude').textContent = data.sources.claude || 0;
+                document.getElementById('source-fs').textContent = data.sources.filesystem || 0;
+                document.getElementById('source-git').textContent = data.sources.git || 0;
+            }
+
+            // Update Claude summary
+            document.getElementById('claude-messages').textContent = data.claude_messages || 0;
+            document.getElementById('claude-tools').textContent = data.claude_tools || 0;
+            document.getElementById('claude-files').textContent = data.files_edited || 0;
+
+            // Update trends
+            if (data.trends && data.trends.sparkline && data.trends.sparkline.length > 0) {
+                document.getElementById('trends-section').style.display = 'block';
+
+                // Build sparkline
+                const maxVal = Math.max(...data.trends.sparkline, 1);
+                const sparkline = document.getElementById('sparkline');
+                sparkline.innerHTML = data.trends.sparkline.map(val => {
+                    const height = Math.max(4, (val / maxVal) * 40);
+                    return `<div class="sparkline-bar" style="height: ${height}px;"></div>`;
+                }).join('');
+
+                // Update delta badge
+                const delta = data.trends.activities_change || 0;
+                const deltaEl = document.getElementById('trend-delta');
+                if (delta > 0) {
+                    deltaEl.className = 'trend-delta positive';
+                    deltaEl.textContent = `+${delta}%`;
+                } else if (delta < 0) {
+                    deltaEl.className = 'trend-delta negative';
+                    deltaEl.textContent = `${delta}%`;
+                } else {
+                    deltaEl.className = 'trend-delta neutral';
+                    deltaEl.textContent = '0%';
+                }
+            } else {
+                document.getElementById('trends-section').style.display = 'none';
+            }
+
+            // Update wins section
+            const winsSection = document.getElementById('wins-section');
+            const winsList = document.getElementById('wins-list');
+            if (data.wins && data.wins.length > 0) {
+                winsSection.style.display = 'block';
+                winsList.innerHTML = data.wins.map(win => `
+                    <div class="win-card">
+                        <div class="win-icon">&#127942;</div>
+                        <div class="win-content">
+                            <div class="win-header">
+                                <span class="win-category">${win.category}</span>
+                                <span class="win-confidence">${win.confidence}% confidence</span>
+                            </div>
+                            <div class="win-summary">${win.summary}</div>
+                            <div class="win-project">${win.project}</div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                winsSection.style.display = 'none';
+            }
+        }
+
+        function switchView(view) {
+            console.log('Switching to view:', view);
+            currentView = view;
+
+            // Update button states
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.view === view);
+            });
+
+            // Update UI with selected view data
+            if (allData && allData.views && allData.views[view]) {
+                console.log('View data:', allData.views[view].total_activities, 'activities');
+                updateUI(allData.views[view]);
+            } else if (allData && !allData.views) {
+                // Legacy single-view format
+                console.log('Legacy format');
+                updateUI(allData);
+            } else {
+                console.log('No data for view:', view, 'allData:', allData);
+            }
+        }
+
+        async function loadRecapData() {
+            try {
+                const response = { ok: true, json: async () => window.RECAP_DATA }; // Use embedded data
+                if (!response.ok) {
+                    console.log('Failed to fetch:', response.status);
+                    return;
+                }
+                allData = await response.json();
+                console.log('Loaded data, views:', Object.keys(allData.views || {}));
+
+                // Check if multi-view format
+                if (allData.views) {
+                    const defaultView = allData.default_view || 'today';
+                    switchView(defaultView);
+                } else {
+                    // Legacy single-view format
+                    updateUI(allData);
+                }
+            } catch (e) {
+                console.log('Error loading data:', e);
+            }
+        }
+
+        // Set up view button listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    console.log('Button clicked:', this.dataset.view);
+                    switchView(this.dataset.view);
+                });
+            });
+
+            // Load data on page load
+            loadRecapData();
+        });
+    </script>
+</body>
+</html>

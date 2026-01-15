@@ -1,5 +1,5 @@
-"""Agent module for task tracking reconciliation."""
+"""Agent module for task tracking."""
 
-from .nightly import run_recap
+from .simple_recap import generate_recap
 
-__all__ = ["run_recap"]
+__all__ = ["generate_recap"]

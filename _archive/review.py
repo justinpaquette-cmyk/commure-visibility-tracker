@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Review CLI for approving/rejecting proposed changes."""
 
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models import Roadmap, ThemeStatus
+
+
+def load_projects_config():
+    """Load projects configuration."""
+    config_path = Path(__file__).parent.parent / "config" / "projects.json"
+    with open(config_path) as f:
+        return json.load(f)
+
+
+def save_projects_config(config):
+    """Save projects configuration."""
+    config_path = Path(__file__).parent.parent / "config" / "projects.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
 
 
 def load_roadmap() -> Roadmap:
@@ -57,6 +72,31 @@ def apply_change(roadmap: Roadmap, change_id: str) -> bool:
         print(f"Acknowledged. Use 'python cli/manual.py theme add <name>' to create the theme.")
         return True
 
+    elif change.change_type == "new_project":
+        # Add new project to projects.json
+        project = change.details.get("project")
+        if not project:
+            print("Error: No project data in change details")
+            return False
+
+        projects_config = load_projects_config()
+
+        # Check for duplicates
+        existing_paths = {p.get('folder_path', '') for p in projects_config.get('projects', [])}
+        if project.get('folder_path') in existing_paths:
+            print(f"Project already exists: {project.get('name')}")
+            change.approved = True
+            return True
+
+        # Add the project
+        projects_config['projects'].append(project)
+        save_projects_config(projects_config)
+
+        change.approved = True
+        confidence = change.details.get('confidence', 0)
+        print(f"Added project: {project.get('name')} ({int(confidence * 100)}% confidence)")
+        return True
+
     return False
 
 
@@ -84,7 +124,18 @@ def cmd_list(args):
     for change in pending:
         print(f"  [{change.id}] {change.change_type}")
         print(f"      {change.description}")
-        if change.details.get("sample_descriptions"):
+
+        if change.change_type == "new_project":
+            project = change.details.get("project", {})
+            indicators = change.details.get("indicators", [])
+            print(f"      Path: {project.get('folder_path', 'Unknown')}")
+            print(f"      Team: {project.get('team', 'Unknown')}")
+            if indicators:
+                print("      Indicators:")
+                for ind in indicators[:3]:
+                    print(f"        - {ind}")
+
+        elif change.details.get("sample_descriptions"):
             print("      Samples:")
             for sample in change.details["sample_descriptions"][:2]:
                 print(f"        - {sample[:50]}")

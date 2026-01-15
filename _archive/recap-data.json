@@ -1,0 +1,238 @@
+{
+  "generated_at": "2026-01-14T15:06:55.732690",
+  "views": {
+    "today": {
+      "date": "January 14, 2026",
+      "total_activities": 64,
+      "projects_touched": 5,
+      "claude_sessions": 7,
+      "files_edited": 95,
+      "team_a_pct": 63,
+      "team_a_name": "Sales Engineering",
+      "team_b_name": "Product Management",
+      "themes": [
+        {
+          "name": "Task Tracker Productivity",
+          "project": "Task Tracker",
+          "status": "active",
+          "count": 14
+        },
+        {
+          "name": "Tts Generator Client",
+          "project": "TTS Generator",
+          "status": "active",
+          "count": 9
+        },
+        {
+          "name": "Client Agnostic Ambient",
+          "project": "Ambient Demos",
+          "status": "active",
+          "count": 8
+        },
+        {
+          "name": "All-in-One Mock EHR Platform",
+          "project": "Mock EHRs",
+          "status": "active",
+          "count": 6
+        },
+        {
+          "name": "Tenet Conifer Test",
+          "project": "Conifer Tenet VBC",
+          "status": "active",
+          "count": 1
+        },
+        {
+          "name": "Client Folder Compassus",
+          "project": "Compassus 835 Automation",
+          "status": "active",
+          "count": 0
+        }
+      ],
+      "sources": {
+        "claude": 14,
+        "filesystem": 35,
+        "git": 9,
+        "slack": 6,
+        "manual": 0
+      },
+      "claude_messages": 1355,
+      "claude_tools": 1231,
+      "trends": {},
+      "wins": [
+        {
+          "project": "tracker",
+          "summary": "Enhanced automation and integration (10 files)",
+          "category": "Development",
+          "confidence": 70,
+          "signals": [
+            "10 files edited in session"
+          ],
+          "files_modified": 10
+        },
+        {
+          "project": "generator",
+          "summary": "Enhanced automation and testing (10 files)",
+          "category": "Feature Development",
+          "confidence": 53,
+          "signals": [
+            "2 medium-impact keywords",
+            "10 files modified"
+          ],
+          "files_modified": 10
+        },
+        {
+          "project": "TTS Generator",
+          "summary": "Initial commit: Multi-speaker TTS Generator",
+          "category": "Bug Fix | Resolution",
+          "confidence": 47,
+          "signals": [
+            "1 medium-impact keywords",
+            "21 files modified"
+          ],
+          "files_modified": 21
+        },
+        {
+          "project": "pk",
+          "summary": "Enhanced automation and UI (13 files)",
+          "category": "Demo | POC",
+          "confidence": 40,
+          "signals": [
+            "17 files modified",
+            "5 activities"
+          ],
+          "files_modified": 17
+        },
+        {
+          "project": "Task Tracker",
+          "summary": "Initial commit: Personal task tracking system",
+          "category": "Infrastructure",
+          "confidence": 40,
+          "signals": [
+            "10 files modified",
+            "17 activities"
+          ],
+          "files_modified": 10
+        }
+      ]
+    },
+    "week": {
+      "date": "January 14, 2026",
+      "total_activities": 102,
+      "projects_touched": 5,
+      "claude_sessions": 33,
+      "files_edited": 168,
+      "team_a_pct": 72,
+      "team_a_name": "Sales Engineering",
+      "team_b_name": "Product Management",
+      "themes": [
+        {
+          "name": "Task Tracker Productivity",
+          "project": "Task Tracker",
+          "status": "active",
+          "count": 14
+        },
+        {
+          "name": "Tenet Conifer Test",
+          "project": "Conifer Tenet VBC",
+          "status": "active",
+          "count": 13
+        },
+        {
+          "name": "Tts Generator Client",
+          "project": "TTS Generator",
+          "status": "active",
+          "count": 9
+        },
+        {
+          "name": "Client Agnostic Ambient",
+          "project": "Ambient Demos",
+          "status": "active",
+          "count": 8
+        },
+        {
+          "name": "All-in-One Mock EHR Platform",
+          "project": "Mock EHRs",
+          "status": "active",
+          "count": 6
+        },
+        {
+          "name": "Client Folder Compassus",
+          "project": "Compassus 835 Automation",
+          "status": "active",
+          "count": 0
+        }
+      ],
+      "sources": {
+        "claude": 40,
+        "filesystem": 47,
+        "git": 9,
+        "slack": 6,
+        "manual": 0
+      },
+      "claude_messages": 1846,
+      "claude_tools": 1573,
+      "trends": {},
+      "wins": []
+    },
+    "month": {
+      "date": "January 14, 2026",
+      "total_activities": 525,
+      "projects_touched": 6,
+      "claude_sessions": 388,
+      "files_edited": 682,
+      "team_a_pct": 81,
+      "team_a_name": "Sales Engineering",
+      "team_b_name": "Product Management",
+      "themes": [
+        {
+          "name": "Tenet Conifer Test",
+          "project": "Conifer Tenet VBC",
+          "status": "active",
+          "count": 18
+        },
+        {
+          "name": "All-in-One Mock EHR Platform",
+          "project": "Mock EHRs",
+          "status": "active",
+          "count": 14
+        },
+        {
+          "name": "Task Tracker Productivity",
+          "project": "Task Tracker",
+          "status": "active",
+          "count": 14
+        },
+        {
+          "name": "Client Folder Compassus",
+          "project": "Compassus 835 Automation",
+          "status": "active",
+          "count": 11
+        },
+        {
+          "name": "Tts Generator Client",
+          "project": "TTS Generator",
+          "status": "active",
+          "count": 9
+        },
+        {
+          "name": "Client Agnostic Ambient",
+          "project": "Ambient Demos",
+          "status": "active",
+          "count": 8
+        }
+      ],
+      "sources": {
+        "claude": 417,
+        "filesystem": 83,
+        "git": 19,
+        "slack": 6,
+        "manual": 0
+      },
+      "claude_messages": 9806,
+      "claude_tools": 8486,
+      "trends": {},
+      "wins": []
+    }
+  },
+  "default_view": "today"
+}

@@ -23,6 +23,9 @@ from collectors.filesystem import collect_activities as collect_fs
 from collectors.git import collect_activities as collect_git
 from collectors.claude import collect_activities as collect_claude
 from collectors.claude import get_session_summary as get_claude_summary
+from agent.matcher import ActivityMatcher
+from agent.auto_themes import run_auto_themes
+from agent.weekly_wins import run_daily_wins, analyze_activities_for_wins
 
 
 def load_config():
@@ -83,12 +86,14 @@ def collect_all_activities(lookback_hours: int = 24, verbose: bool = False) -> L
     claude_activities = collect_claude(lookback_hours=lookback_hours, verbose=verbose)
     activities.extend(claude_activities)
 
-    # Load any manual activities from today
+    # Load any saved activities from today (manual entries, slack imports, etc.)
     if verbose:
-        print("\nLoading manual activities...")
+        print("\nLoading saved activities...")
     manual = load_todays_activities()
-    manual_only = [a for a in manual if a.source == ActivitySource.MANUAL]
-    activities.extend(manual_only)
+    saved_activities = [a for a in manual if a.source in (
+        ActivitySource.MANUAL, ActivitySource.SLACK
+    )]
+    activities.extend(saved_activities)
 
     # Sort by timestamp
     activities.sort(key=lambda a: a.timestamp, reverse=True)
@@ -102,19 +107,34 @@ def collect_all_activities(lookback_hours: int = 24, verbose: bool = False) -> L
 def categorize_activities(
     activities: List[Activity],
     roadmap: Roadmap,
-    projects_config: dict
+    projects_config: dict,
+    use_matcher: bool = True
 ) -> dict:
     """
     Categorize activities by project and theme.
+
+    Args:
+        activities: List of activities to categorize
+        roadmap: Current roadmap with themes
+        projects_config: Projects configuration
+        use_matcher: Use multi-signal ActivityMatcher (default True)
 
     Returns:
         {
             "by_project": {project_name: [activities]},
             "by_theme": {theme_id: [activities]},
+            "high_confidence": [activities],  # When using matcher
+            "low_confidence": [activities],   # When using matcher
             "uncategorized": [activities],
             "summary": {...}
         }
     """
+    if use_matcher:
+        # Use the new multi-signal matcher
+        matcher = ActivityMatcher(roadmap, projects_config)
+        return matcher.categorize_batch(activities)
+
+    # Legacy simple matching (kept for backwards compatibility)
     result = {
         "by_project": defaultdict(list),
         "by_theme": defaultdict(list),
@@ -268,7 +288,8 @@ def format_recap(
     changes: List[ProposedChange],
     roadmap: Roadmap,
     distribution: dict,
-    claude_summary: dict = None
+    claude_summary: dict = None,
+    daily_wins: list = None
 ) -> str:
     """Format the recap as a readable summary."""
     lines = []
@@ -283,6 +304,31 @@ def format_recap(
     lines.append(f"\nTotal activities: {summary['total_activities']}")
     lines.append(f"Projects touched: {', '.join(summary['projects_touched']) or 'None'}")
     lines.append(f"Sources: {', '.join(f'{k}({v})' for k, v in summary['sources'].items())}")
+
+    # Confidence warnings
+    avg_confidence = summary.get('avg_confidence', 0)
+    uncategorized_count = len(categorized.get('uncategorized', []))
+    total = summary['total_activities']
+
+    if avg_confidence > 0 and avg_confidence < 0.6:
+        lines.append(f"\n⚠️  LOW CONFIDENCE: Average match confidence is {int(avg_confidence * 100)}%")
+        lines.append("    Consider reviewing project aliases and theme keywords")
+
+    if total > 0 and uncategorized_count / total > 0.25:
+        pct = int(uncategorized_count / total * 100)
+        lines.append(f"\n⚠️  HIGH UNCATEGORIZED: {pct}% of activities couldn't be matched")
+        lines.append("    Run 'python3 agent/auto_themes.py -v' to detect new themes")
+
+    # Daily Wins (show first for visibility)
+    if daily_wins:
+        lines.append("\n## Today's Wins 🏆")
+        for win in daily_wins[:5]:
+            category = win.get('category', 'Development')
+            summary_text = win.get('summary', win.get('description', ''))[:80]
+            project = win.get('project', 'Unknown')
+            confidence = int(win.get('confidence', 0) * 100)
+            lines.append(f"  • [{category}] {summary_text}")
+            lines.append(f"    Project: {project} ({confidence}% confidence)")
 
     # Claude Code summary
     if claude_summary and claude_summary.get('total_sessions', 0) > 0:
@@ -342,7 +388,51 @@ def format_recap(
     return "\n".join(lines)
 
 
-def run_recap(lookback_hours: int = 24, verbose: bool = False, save: bool = True):
+def save_daily_snapshot(categorized: dict, distribution: dict, claude_summary: dict):
+    """Save daily snapshot for historical trends."""
+    history_dir = Path(__file__).parent.parent / "data" / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
+
+    snapshot_file = history_dir / "daily_snapshots.json"
+
+    # Load existing snapshots
+    if snapshot_file.exists():
+        with open(snapshot_file) as f:
+            data = json.load(f)
+    else:
+        data = {"snapshots": []}
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Remove any existing snapshot for today (replace with latest)
+    data["snapshots"] = [s for s in data["snapshots"] if s.get("date") != today]
+
+    # Build new snapshot
+    snapshot = {
+        "date": today,
+        "total_activities": categorized["summary"]["total_activities"],
+        "by_team": {team: info["count"] for team, info in distribution.items()},
+        "by_project": {proj: len(acts) for proj, acts in categorized["by_project"].items()},
+        "by_source": categorized["summary"]["sources"],
+        "claude_sessions": claude_summary.get("total_sessions", 0),
+        "claude_messages": claude_summary.get("total_messages", 0),
+        "files_edited": claude_summary.get("total_files_edited", 0),
+        "avg_confidence": categorized["summary"].get("avg_confidence", 0),
+        "uncategorized_count": len(categorized.get("uncategorized", [])),
+    }
+
+    data["snapshots"].append(snapshot)
+
+    # Keep only last 30 days
+    data["snapshots"] = sorted(data["snapshots"], key=lambda x: x["date"])[-30:]
+
+    with open(snapshot_file, "w") as f:
+        json.dump(data, f, indent=2)
+
+    return snapshot
+
+
+def run_recap(lookback_hours: int = 24, verbose: bool = False, save: bool = True, auto_themes: bool = True):
     """Run the full recap workflow."""
     settings, projects_config = load_config()
     roadmap = load_roadmap()
@@ -351,6 +441,20 @@ def run_recap(lookback_hours: int = 24, verbose: bool = False, save: bool = True
     if verbose:
         print("Collecting activities...\n")
     activities = collect_all_activities(lookback_hours, verbose)
+
+    # Run auto-theme detection and status updates
+    if auto_themes and save:
+        if verbose:
+            print("\nRunning auto-theme detection...")
+        theme_results = run_auto_themes(
+            activities,
+            auto_add=True,
+            auto_status=True,
+            verbose=verbose
+        )
+        # Reload roadmap if themes were modified
+        if theme_results['themes_added'] > 0 or theme_results['statuses_updated'] > 0:
+            roadmap = load_roadmap()
 
     # Categorize
     if verbose:
@@ -368,8 +472,23 @@ def run_recap(lookback_hours: int = 24, verbose: bool = False, save: bool = True
     # Get Claude session summary
     claude_summary = get_claude_summary(lookback_hours)
 
+    # Extract daily wins (for short lookbacks)
+    daily_wins = []
+    if lookback_hours <= 48:
+        if verbose:
+            print("Extracting daily wins...")
+        daily_wins = analyze_activities_for_wins(activities)
+        if verbose and daily_wins:
+            print(f"  Found {len(daily_wins)} potential win(s)")
+
     # Format recap
-    recap = format_recap(categorized, changes, roadmap, distribution, claude_summary)
+    recap = format_recap(categorized, changes, roadmap, distribution, claude_summary, daily_wins)
+
+    # Save daily snapshot for trends
+    if save:
+        save_daily_snapshot(categorized, distribution, claude_summary)
+        if verbose:
+            print("Saved daily snapshot for trends")
 
     # Save proposed changes to roadmap
     if save and changes:
