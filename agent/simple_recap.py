@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Simple recap - dead simple activity summary.
 
-No auto-themes. No wins detection. No AI. Just facts.
+Zero-config project discovery. Auto-detects projects from folder paths.
+Only needs overrides.json for custom names and exclusions.
 """
 
 import json
+import re
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -16,6 +18,237 @@ from collectors.claude import get_session_summary
 from collectors.git import collect_activities as collect_git
 from collectors.filesystem import collect_activities as collect_fs
 
+
+# Cache for overrides config
+_overrides_cache = None
+
+
+def load_overrides() -> dict:
+    """Load overrides config (names, teams, exclusions)."""
+    global _overrides_cache
+    if _overrides_cache is not None:
+        return _overrides_cache
+
+    config_path = Path(__file__).parent.parent / "config" / "overrides.json"
+    if config_path.exists():
+        with open(config_path) as f:
+            _overrides_cache = json.load(f)
+    else:
+        _overrides_cache = {"names": {}, "teams": {}, "exclude": []}
+
+    return _overrides_cache
+
+
+def is_excluded(path_or_name: str) -> bool:
+    """Check if a path or name should be excluded."""
+    overrides = load_overrides()
+    excludes = overrides.get("exclude", [])
+    check = path_or_name.lower()
+    return any(exc.lower() in check for exc in excludes)
+
+
+def auto_name_from_encoded(encoded_name: str) -> str:
+    """Auto-generate a project name from Claude's encoded folder name.
+
+    Works with the encoded name directly to avoid hyphen ambiguity.
+    E.g., '-Users-justinpaquette-Documents-sales-eng-projects-v2-client-agnostic-ambient-demos'
+    """
+    overrides = load_overrides()
+    name_overrides = overrides.get("names", {})
+
+    encoded_lower = encoded_name.lower()
+
+    # Check overrides first - match any segment in the path
+    # Split by common path segments and check each
+    for key, val in name_overrides.items():
+        key_encoded = key.lower().replace(" ", "-").replace("/", "-")
+        if key_encoded in encoded_lower or key.lower() in encoded_lower:
+            return val
+
+    # Pattern: Client-Folder-ClientName-ProjectName
+    if "-client-folder-" in encoded_lower:
+        # Extract what comes after client-folder
+        idx = encoded_lower.find("-client-folder-") + len("-client-folder-")
+        rest = encoded_name[idx:]
+        # Take first segment (client name)
+        parts = rest.split("-")
+        if parts:
+            # Try to get client and maybe project
+            client = parts[0]
+            # Look for next meaningful segment
+            project = ""
+            if len(parts) > 1:
+                # Skip common suffixes and get the project
+                for i, p in enumerate(parts[1:], 1):
+                    if p.lower() not in ["the", "and", "of", "for"]:
+                        project = "-".join(parts[1:min(i+2, len(parts))])
+                        break
+            name = f"{client} {project}".strip().replace("-", " ").title()
+            if name and len(name) > 2:
+                return name
+
+    # Pattern: client-agnostic-project-name
+    if "-client-agnostic-" in encoded_lower:
+        idx = encoded_lower.find("-client-agnostic-") + len("-client-agnostic-")
+        rest = encoded_name[idx:]
+        # Get the project name (everything until end or next major marker)
+        # Common project names in your structure
+        known_projects = ["ambient-demos", "tts-generator", "mock-ehrs", "rcm-835"]
+        for proj in known_projects:
+            if proj in rest.lower():
+                return proj.replace("-", " ").title()
+        # Otherwise take first segment
+        first_seg = rest.split("-")[0] if rest else ""
+        if first_seg and len(first_seg) > 2:
+            return first_seg.replace("-", " ").title()
+
+    # Pattern: productivity-project-name
+    if "-productivity-" in encoded_lower:
+        idx = encoded_lower.find("-productivity-") + len("-productivity-")
+        rest = encoded_name[idx:]
+        # Get the project name
+        if "commure-task-tracker" in rest.lower():
+            return name_overrides.get("commure-task-tracker", "Task Tracker")
+        first_seg = rest.split("-")[0] if rest else ""
+        if first_seg and len(first_seg) > 2:
+            return first_seg.replace("-", " ").title()
+
+    # Pattern: mock-ehrs
+    if "-mock-ehrs" in encoded_lower:
+        return "Mock EHRs"
+
+    # Fallback: try to extract last meaningful segment
+    parts = encoded_name.strip("-").split("-")
+    # Filter out common path components
+    ignore = ["users", "justinpaquette", "documents", "sales", "eng", "projects", "v2",
+              "client", "folder", "agnostic", "productivity"]
+    meaningful = [p for p in parts if p.lower() not in ignore and len(p) > 2]
+    if meaningful:
+        # Take last few meaningful parts as the name
+        name = " ".join(meaningful[-2:]).title()
+        return name
+
+    return "Misc"
+
+
+def auto_team_from_encoded(encoded_name: str, project_name: str) -> str:
+    """Auto-detect team from encoded path patterns.
+
+    Rules:
+    - Client Folder/* -> Sales Engineering (client work)
+    - client-agnostic/* -> Sales Engineering (demo/tool work)
+    - productivity/* -> Product Management (internal tools)
+    - Check overrides for specific project names
+    """
+    overrides = load_overrides()
+    team_overrides = overrides.get("teams", {})
+
+    # Check if project name has a team override
+    if project_name in team_overrides:
+        return team_overrides[project_name]
+
+    encoded_lower = encoded_name.lower()
+
+    # Sales Engineering patterns (in encoded form, hyphens are path separators)
+    se_patterns = [
+        "-client-folder-",
+        "-client-agnostic-",
+        "-mock-ehrs"
+    ]
+    for pattern in se_patterns:
+        if pattern in encoded_lower:
+            return "Sales Engineering"
+
+    # Product Management patterns
+    pm_patterns = ["-productivity-", "-task-tracker", "-commure-task-tracker"]
+    for pattern in pm_patterns:
+        if pattern in encoded_lower:
+            return "Product Management"
+
+    return "Other"
+
+
+def decode_claude_path(encoded_name: str) -> str:
+    """Decode Claude's encoded folder name to a path.
+
+    Claude encodes paths like:
+    -Users-justinpaquette-Documents-sales-eng-projects-v2-...
+
+    Returns decoded path (best effort - hyphens in folder names are ambiguous).
+    """
+    if not encoded_name:
+        return ""
+
+    if encoded_name.startswith("-"):
+        # Standard encoded path
+        return "/" + encoded_name[1:].replace("-", "/")
+    else:
+        # Short name or already decoded
+        return encoded_name
+
+
+def discover_project(encoded_or_path: str) -> dict:
+    """Auto-discover project info from an encoded Claude path or file path.
+
+    Returns:
+        {"name": str, "team": str} or None if excluded
+    """
+    if not encoded_or_path:
+        return {"name": "Misc", "team": "Other"}
+
+    # Check exclusions first
+    if is_excluded(encoded_or_path):
+        return None
+
+    encoded_lower = encoded_or_path.lower()
+
+    # Filter generic/meaningless paths
+    generic = ["-project", "-folder", "-test", "-tmp", "-temp", "-untitled", "-wins", "-task", "private-tmp"]
+    for g in generic:
+        if encoded_lower.endswith(g):
+            return {"name": "Misc", "team": "Other"}
+
+    # Auto-generate name and team from encoded path
+    name = auto_name_from_encoded(encoded_or_path)
+    team = auto_team_from_encoded(encoded_or_path, name)
+
+    return {"name": name, "team": team}
+
+
+# Keep this function name for backward compatibility with collectors/claude.py
+def map_claude_project_name(encoded_name: str, projects: list = None) -> str:
+    """Map Claude's encoded folder name to a project name.
+
+    This is the main entry point used by collectors/claude.py.
+    The projects parameter is ignored - we use auto-discovery now.
+    """
+    result = discover_project(encoded_name)
+    if result is None:
+        return None  # Excluded
+    return result["name"]
+
+
+def get_project_team(project_name: str, encoded_path: str = "") -> str:
+    """Get team for a project name."""
+    overrides = load_overrides()
+    team_overrides = overrides.get("teams", {})
+
+    if project_name in team_overrides:
+        return team_overrides[project_name]
+
+    if encoded_path:
+        return auto_team_from_encoded(encoded_path, project_name)
+
+    # Try to infer team from project name patterns
+    name_lower = project_name.lower()
+    if any(p in name_lower for p in ["task tracker", "productivity"]):
+        return "Product Management"
+    if any(p in name_lower for p in ["demo", "ehr", "automation", "client"]):
+        return "Sales Engineering"
+
+    return "Other"
+
+
 # Import summary generator (lazy to avoid circular imports)
 def get_day_summary(date_str: str) -> str:
     try:
@@ -26,17 +259,12 @@ def get_day_summary(date_str: str) -> str:
 
 
 def get_project_details(hours: int = 24) -> dict:
-    """Get detailed activity breakdown by project.
-
-    Uses the same project naming logic as the main recap for consistency.
-    """
-    from pathlib import Path
+    """Get detailed activity breakdown by project."""
     import os
 
     details = {}
     claude_projects_dir = Path.home() / ".claude" / "projects"
     cutoff = datetime.now() - timedelta(hours=hours)
-    projects_config = load_projects()
 
     if not claude_projects_dir.exists():
         return details
@@ -45,17 +273,13 @@ def get_project_details(hours: int = 24) -> dict:
         if "subagent" in str(jsonl) or "agent-" in jsonl.name:
             continue
         try:
-            # Parse session to check for recent activity
             session_info = parse_session_for_details(jsonl, cutoff)
 
-            # Skip if no recent activity in this session
             if not session_info.get("has_recent_activity") and not session_info.get("first_message"):
-                # Fallback: check file modification time
                 mtime = datetime.fromtimestamp(jsonl.stat().st_mtime)
                 if mtime < cutoff:
                     continue
 
-            # Use latest message time or file mtime
             if session_info.get("latest_time"):
                 mtime = session_info["latest_time"]
                 if mtime.tzinfo:
@@ -63,21 +287,14 @@ def get_project_details(hours: int = 24) -> dict:
             else:
                 mtime = datetime.fromtimestamp(jsonl.stat().st_mtime)
 
-            # Extract folder name for matching - use same logic as main recap
+            # Use auto-discovery for project naming
             proj_folder = jsonl.parent.name
-            folder_lower = proj_folder.lower()
-
-            # Exclude specific projects first
-            excluded_keywords = ["book-ai-covenant", "ai-covenant", "covenant"]
-            if any(kw in folder_lower for kw in excluded_keywords):
+            project = discover_project(proj_folder)
+            if project is None:  # Excluded
                 continue
 
-            # Use map_claude_project_name for consistent naming with main recap
-            clean_name = map_claude_project_name(proj_folder, projects_config)
-            if clean_name is None:  # Excluded project
-                continue
+            clean_name = project["name"]
 
-            # Skip if no first message
             if not session_info.get("first_message"):
                 continue
 
@@ -94,7 +311,6 @@ def get_project_details(hours: int = 24) -> dict:
         except Exception:
             continue
 
-    # Convert sets to lists for JSON
     for proj in details:
         details[proj]["files"] = list(details[proj]["files"])
 
@@ -116,12 +332,10 @@ def parse_session_for_details(jsonl_path, cutoff: datetime = None) -> dict:
                 except json.JSONDecodeError:
                     continue
 
-                # Check timestamp if filtering by time
                 timestamp = entry.get("timestamp")
                 if timestamp and cutoff:
                     try:
                         msg_time = date_parser.parse(timestamp)
-                        # Make cutoff timezone-aware if msg_time is
                         if msg_time.tzinfo and cutoff.tzinfo is None:
                             from datetime import timezone
                             cutoff = cutoff.replace(tzinfo=timezone.utc)
@@ -132,7 +346,6 @@ def parse_session_for_details(jsonl_path, cutoff: datetime = None) -> dict:
                     except:
                         pass
 
-                # Get first user message
                 if entry.get("type") == "user" and not info["first_message"]:
                     msg = entry.get("message", {})
                     content = msg.get("content", "")
@@ -144,7 +357,6 @@ def parse_session_for_details(jsonl_path, cutoff: datetime = None) -> dict:
                                 info["first_message"] = c.get("text", "").strip()
                                 break
 
-                # Look for file edits
                 msg = entry.get("message", {})
                 content = msg.get("content", [])
                 if isinstance(content, list):
@@ -165,15 +377,6 @@ def parse_session_for_details(jsonl_path, cutoff: datetime = None) -> dict:
     return info
 
 
-def load_projects() -> list:
-    """Load projects from config."""
-    config_path = Path(__file__).parent.parent / "config" / "projects.json"
-    if config_path.exists():
-        with open(config_path) as f:
-            return json.load(f).get("projects", [])
-    return []
-
-
 def load_daily_entry(date: str = None) -> dict:
     """Load daily form entry."""
     if date is None:
@@ -192,166 +395,77 @@ def load_daily_entry(date: str = None) -> dict:
     return {}
 
 
-def match_path_to_project(filepath: str, projects: list) -> str:
-    """Simple path matching. No fancy scoring."""
-    if not filepath:
-        return "Other"
+def match_path_to_project(filepath: str) -> str:
+    """Match a file path to a project name.
 
-    filepath_lower = filepath.lower()
-
-    for project in projects:
-        folder = project.get("folder_path", "")
-        if folder and folder.lower() in filepath_lower:
-            return project["name"]
-
-        # Also check aliases
-        for alias in project.get("aliases", []):
-            if alias.lower() in filepath_lower:
-                return project["name"]
-
-    # No match - extract a meaningful folder name
-    return extract_folder_group(filepath)
-
-
-def extract_folder_group(filepath: str) -> str:
-    """Extract a meaningful folder name when no project matches.
-
-    Bubbles up folder names to create logical groupings.
+    Works with actual file paths (not Claude encoded paths).
     """
     if not filepath:
         return "Other"
 
-    # Key parent folders to look for
-    markers = [
-        "client folder/",
-        "client-agnostic/",
-        "mock-ehrs/",
-        "productivity/",
-        ".claude/",
-    ]
+    overrides = load_overrides()
+    name_overrides = overrides.get("names", {})
+
+    # Check exclusions
+    if is_excluded(filepath):
+        return "Other"
 
     filepath_lower = filepath.lower()
 
-    for marker in markers:
-        if marker in filepath_lower:
-            # Get the folder after the marker
-            idx = filepath_lower.find(marker) + len(marker)
-            rest = filepath[idx:]
-            # Get first meaningful folder name
-            parts = rest.split("/")
-            for part in parts:
-                if part and not part.startswith(".") and len(part) > 2:
-                    # Clean up the name
-                    name = part.replace("-", " ").replace("_", " ").title()
-                    return name
+    # Check overrides first
+    for key, val in name_overrides.items():
+        if key.lower() in filepath_lower:
+            return val
 
-    # Fall back to parent folder of the file
+    # Pattern: Client Folder/ClientName/...
+    if "/client folder/" in filepath_lower:
+        match = re.search(r'/client folder/([^/]+)/?([^/]*)', filepath_lower)
+        if match:
+            client = match.group(1)
+            project = match.group(2) if match.group(2) else ""
+            name = f"{client} {project}".strip().replace("-", " ").replace("_", " ").title()
+            if name:
+                return name
+
+    # Pattern: client-agnostic/project-name
+    if "/client-agnostic/" in filepath_lower:
+        match = re.search(r'/client-agnostic/([^/]+)', filepath_lower)
+        if match:
+            proj = match.group(1)
+            if proj in name_overrides:
+                return name_overrides[proj]
+            return proj.replace("-", " ").replace("_", " ").title()
+
+    # Pattern: productivity/project-name
+    if "/productivity/" in filepath_lower:
+        match = re.search(r'/productivity/([^/]+)', filepath_lower)
+        if match:
+            proj = match.group(1)
+            if proj in name_overrides:
+                return name_overrides[proj]
+            return proj.replace("-", " ").replace("_", " ").title()
+
+    # Pattern: mock-ehrs
+    if "/mock-ehrs" in filepath_lower:
+        return "Mock EHRs"
+
+    # Fallback: extract meaningful folder from path
     parts = filepath.split("/")
-    if len(parts) >= 2:
-        parent = parts[-2]
-        if parent and not parent.startswith(".") and len(parent) > 2:
-            return parent.replace("-", " ").replace("_", " ").title()
+    ignore = ["users", "justinpaquette", "documents", "sales eng projects v2"]
+    for part in reversed(parts):
+        if part and len(part) > 2 and part.lower() not in ignore:
+            return part.replace("-", " ").replace("_", " ").title()
 
     return "Other"
 
 
-def map_claude_project_name(encoded_name: str, projects: list) -> str:
-    """Map Claude's encoded folder names to full project names.
-
-    Claude stores projects as encoded folder names like:
-    - '-Users-justinpaquette-Documents-sales-eng-projects-v2-client-folder-Tenet-...'
-    - 'tracker' (short name from sessions_by_project)
-
-    We decode these and match against projects.json folder paths.
-    """
-    if not encoded_name:
-        return "Misc"
-
-    encoded_lower = encoded_name.lower()
-
-    # Exclude specific projects
-    excluded_projects = ["book-ai-covenant", "ai-covenant", "covenant"]
-    if any(exc in encoded_lower for exc in excluded_projects):
-        return None  # Will be filtered out
-
-    # Filter out generic/meaningless names
-    generic_names = ["project", "folder", "test", "tmp", "temp", "untitled", "wins", "private-tmp", "task"]
-    if encoded_lower.strip("-") in generic_names:
-        return "Misc"
-
-    # Also check if the path ends with a generic name
-    path_parts = encoded_lower.strip("-").split("-")
-    if path_parts and path_parts[-1] in generic_names:
-        return "Misc"
-
-    # Decode the path: Claude encodes paths by replacing / with -
-    # E.g., "-Users-justinpaquette-Documents-..." -> "/Users/justinpaquette/Documents/..."
-    if encoded_name.startswith("-"):
-        decoded_path = "/" + encoded_name[1:].replace("-", "/")
-    else:
-        decoded_path = encoded_name.replace("-", "/")
-
-    decoded_lower = decoded_path.lower()
-
-    # Try to match against project folder paths
-    best_match = None
-    best_score = 0
-
-    for project in projects:
-        folder = project.get("folder_path", "")
-        folder_lower = folder.lower()
-
-        # Direct match - decoded path starts with or contains project folder
-        if folder_lower and (
-            decoded_lower.startswith(folder_lower) or
-            folder_lower in decoded_lower
-        ):
-            score = len(folder_lower)
-            if score > best_score:
-                best_score = score
-                best_match = project["name"]
-
-        # Check aliases
-        for alias in project.get("aliases", []):
-            alias_lower = alias.lower()
-            if alias_lower in decoded_lower or alias_lower in encoded_lower:
-                score = len(alias_lower) + 100  # Boost alias matches
-                if score > best_score:
-                    best_score = score
-                    best_match = project["name"]
-
-    if best_match:
-        return best_match
-
-    # No match - extract a meaningful name from the path
-    # Look for recognizable folder markers
-    markers = ["client-folder/", "client-agnostic/", "productivity/"]
-    for marker in markers:
-        if marker in decoded_lower:
-            idx = decoded_lower.find(marker) + len(marker)
-            rest = decoded_path[idx:]
-            # Get first folder after marker
-            parts = rest.split("/")
-            for part in parts:
-                if part and len(part) > 2:
-                    return part.replace("-", " ").title()
-
-    # Last resort: use last meaningful folder from path
-    parts = decoded_path.rstrip("/").split("/")
-    for part in reversed(parts):
-        if part and len(part) > 3 and part.lower() not in ["users", "documents", "justinpaquette"]:
-            return part.replace("-", " ").title()
-
-    return "Misc"
-
-
-def calculate_team_distribution(by_project: dict, projects: list) -> dict:
+def calculate_team_distribution(by_project: dict) -> dict:
     """Calculate team distribution from project activities."""
     team_counts = {}
-    project_to_team = {p["name"]: p.get("team", "Other") for p in projects}
 
     for proj_name, data in by_project.items():
-        team = project_to_team.get(proj_name, "Other")
+        # Get team for this project (uses auto-detection + overrides)
+        team = get_project_team(proj_name)
         team_counts[team] = team_counts.get(team, 0) + data["count"]
 
     total = sum(team_counts.values()) or 1
@@ -359,20 +473,17 @@ def calculate_team_distribution(by_project: dict, projects: list) -> dict:
 
 
 def collect_all(hours: int = 24) -> list:
-    """Collect all activities. Simple.
+    """Collect all activities (git + filesystem).
 
-    Note: Claude sessions are NOT collected here - they come from
-    get_session_summary() to avoid double-counting.
+    Note: Claude sessions come from get_session_summary() to avoid double-counting.
     """
     activities = []
 
-    # Git commits
     try:
         activities.extend(collect_git(hours))
     except Exception:
         pass
 
-    # File changes
     try:
         activities.extend(collect_fs(hours))
     except Exception:
@@ -382,12 +493,11 @@ def collect_all(hours: int = 24) -> list:
 
 
 def generate_recap(hours: int = 24) -> dict:
-    """Generate simple recap data."""
-    projects = load_projects()
+    """Generate simple recap data with auto-discovered projects."""
     activities = collect_all(hours)
     daily = load_daily_entry()
 
-    # Get Claude session summary (rich data already collected)
+    # Get Claude session summary
     claude_summary = {}
     try:
         claude_summary = get_session_summary(hours)
@@ -397,43 +507,37 @@ def generate_recap(hours: int = 24) -> dict:
     # Group by project
     by_project = defaultdict(lambda: {"count": 0, "files": set(), "messages": 0})
 
-    # First, use Claude's sessions_by_project (more accurate)
+    # Process Claude sessions
     sessions_by_project = claude_summary.get("sessions_by_project", {})
-    for short_name, stats in sessions_by_project.items():
-        # Map short Claude project name to full project name
-        proj_name = map_claude_project_name(short_name, projects)
-        if proj_name is None:  # Excluded project
+    for encoded_name, stats in sessions_by_project.items():
+        project = discover_project(encoded_name)
+        if project is None:  # Excluded
             continue
+        proj_name = project["name"]
         by_project[proj_name]["count"] += 1
         by_project[proj_name]["messages"] += stats.get("messages", 0)
-        by_project[proj_name]["files"].update(stats.get("files_edited", []) if isinstance(stats.get("files_edited"), list) else [])
+        files = stats.get("files_edited", [])
+        if isinstance(files, list):
+            by_project[proj_name]["files"].update(files)
 
-    # Then add git/filesystem activities - use pre-determined project names
-    # (Claude activities are not in this list - they come from sessions_by_project above)
+    # Process git/filesystem activities
     for a in activities:
-        # Use the project name already determined by the collector
         project_name = None
-        if hasattr(a, 'raw_data'):
-            project_name = a.raw_data.get('project')
 
-        # If no project from collector, try matching via project_path
-        if not project_name and hasattr(a, 'project_path') and a.project_path:
-            project_name = match_path_to_project(a.project_path, projects)
+        # Always use match_path_to_project for consistent naming
+        if hasattr(a, 'project_path') and a.project_path:
+            project_name = match_path_to_project(a.project_path)
 
-        # Fallback to "Other"
         if not project_name or project_name == "Other":
-            project_name = "Other"
+            project_name = "Misc"
 
-        # Get files for the count
         files = []
         if hasattr(a, 'raw_data'):
-            # Git activities have files_changed, filesystem has files
             files_changed = a.raw_data.get('files_changed', [])
             files_list = a.raw_data.get('files', [])
             repo_path = a.raw_data.get('repo_path', '')
             directory = a.raw_data.get('directory', '')
 
-            # Prepend full path if we have it
             if repo_path and files_changed:
                 files = [f"{repo_path}/{f}" for f in files_changed]
             elif directory and files_list:
@@ -456,14 +560,14 @@ def generate_recap(hours: int = 24) -> dict:
             })
 
     # Calculate team distribution
-    team_dist = calculate_team_distribution(by_project, projects)
+    team_dist = calculate_team_distribution(by_project)
 
     # Generate day summary and project details
     today = datetime.now().strftime("%Y-%m-%d")
     day_summary = get_day_summary(today)
     project_details = get_project_details(hours)
 
-    # Calculate total activities (git+fs + claude sessions)
+    # Calculate total activities
     claude_session_count = len(sessions_by_project)
     total_activities = len(activities) + claude_session_count
 
@@ -496,24 +600,20 @@ def print_recap(data: dict):
     print(f"  RECAP: {data['date']}")
     print(f"{'='*50}\n")
 
-    # Daily intent
     if data["daily"]["intent"]:
         print(f"  Intent: {data['daily']['intent']}\n")
 
-    # Activity summary
     print(f"  {data['total_activities']} activities | {data['total_files']} files\n")
 
     print("  By Project:")
     for p in data["projects"][:8]:
         print(f"    {p['name']}: {p['activities']} activities, {p['files']} files")
 
-    # Wins
     if data["daily"]["wins"]:
         print(f"\n  Wins:")
         for w in data["daily"]["wins"]:
             print(f"    + {w}")
 
-    # Blockers
     if data["daily"]["blockers"]:
         print(f"\n  Blockers:")
         for b in data["daily"]["blockers"]:

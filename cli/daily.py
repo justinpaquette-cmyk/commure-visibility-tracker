@@ -471,6 +471,63 @@ def history(date_str: str):
         print(f"  SUMMARY: {summary}\n")
 
 
+def weekly_wins():
+    """Show all wins for the current week (Monday to today)."""
+    data = load_daily_data()
+    today = datetime.now()
+
+    # Find Monday of this week
+    days_since_monday = today.weekday()  # Monday=0, Sunday=6
+    monday = today - timedelta(days=days_since_monday)
+
+    print(f"\n{'='*50}")
+    print(f"  WEEKLY WINS: Week of {monday.strftime('%B %d, %Y')}")
+    print(f"{'='*50}\n")
+
+    all_wins = []
+    current = monday
+
+    while current <= today:
+        date_str = current.strftime("%Y-%m-%d")
+        entry = get_entry(date_str)
+
+        if entry and entry.get("wins"):
+            day_name = current.strftime("%A")
+            for win in entry["wins"]:
+                all_wins.append({
+                    "date": date_str,
+                    "day": day_name,
+                    "win": win
+                })
+
+        current += timedelta(days=1)
+
+    if all_wins:
+        # Group by day for display
+        current_day = None
+        for item in all_wins:
+            if item["day"] != current_day:
+                current_day = item["day"]
+                print(f"  {current_day} ({item['date']}):")
+
+            print(f"    - {item['win']}")
+
+        print(f"\n  Total: {len(all_wins)} wins this week")
+
+        # Generate a summary for copying
+        print(f"\n{'='*50}")
+        print("  COPY-PASTE SUMMARY:")
+        print(f"{'='*50}")
+        print(f"\nWins for week of {monday.strftime('%B %d')}:\n")
+        for item in all_wins:
+            print(f"- {item['win']}")
+    else:
+        print("  No wins logged this week yet.")
+        print("  Add wins with: daily.py win \"Your accomplishment\"")
+
+    print()
+
+
 def main():
     import argparse
 
@@ -496,6 +553,9 @@ def main():
     history_parser = subparsers.add_parser("history", help="Show activity for a past date")
     history_parser.add_argument("date", help="Date (YYYY-MM-DD)")
 
+    # Weekly wins
+    subparsers.add_parser("wins", help="Show all wins for the current week")
+
     args = parser.parse_args()
 
     if args.command == "form" or args.command is None:
@@ -508,6 +568,8 @@ def main():
         quick_blocker(" ".join(args.text))
     elif args.command == "history":
         history(args.date)
+    elif args.command == "wins":
+        weekly_wins()
 
 
 if __name__ == "__main__":

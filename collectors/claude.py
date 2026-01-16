@@ -363,13 +363,10 @@ def get_session_summary(lookback_hours: int = 24) -> Dict[str, Any]:
     Get a high-level summary of Claude Code sessions.
 
     Returns summary statistics useful for the recap.
+    Uses auto-discovery for project names (no manual config needed).
     """
     since = datetime.now() - timedelta(hours=lookback_hours)
     sessions = find_session_files(since)
-
-    # Load projects config for consistent naming
-    _, projects_config = load_config()
-    projects = projects_config.get("projects", [])
 
     summary = {
         'total_sessions': len(sessions),
@@ -380,7 +377,7 @@ def get_session_summary(lookback_hours: int = 24) -> Dict[str, Any]:
         'sessions_by_project': {},
     }
 
-    # Import map_claude_project_name for consistent naming
+    # Import auto-discovery function
     from agent.simple_recap import map_claude_project_name
 
     for session in sessions:
@@ -389,8 +386,8 @@ def get_session_summary(lookback_hours: int = 24) -> Dict[str, Any]:
         if session_data['message_count'] == 0:
             continue
 
-        # Use raw encoded folder name for project matching (more reliable)
-        project_name = map_claude_project_name(session['project_encoded'], projects)
+        # Use auto-discovery for project naming
+        project_name = map_claude_project_name(session['project_encoded'])
         if project_name is None:  # Excluded project
             continue
         summary['total_messages'] += session_data['message_count']

@@ -1,0 +1,24 @@
+{
+  "names": {
+    "v0-emulating-pk": "S&S Demo (PK Emulation)",
+    "emulating-pk": "S&S Demo (PK Emulation)",
+    "835-837_automation": "Compassus 835 Automation",
+    "835-837-automation": "Compassus 835 Automation",
+    "Conifer Tenet VBC": "Conifer Tenet VBC",
+    "commure-task-tracker": "Task Tracker",
+    "cc-to-mobile-interface": "Mobile Interface",
+    "tts-generator": "TTS Generator",
+    "ambient-demos": "Ambient Demos",
+    "mock-ehrs": "Mock EHRs"
+  },
+  "teams": {
+    "Task Tracker": "Product Management"
+  },
+  "exclude": [
+    "book-ai-covenant",
+    "ai-covenant",
+    "personal",
+    "BAK",
+    "test"
+  ]
+}
