@@ -12,8 +12,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from agent.simple_recap import generate_recap
 
 
-def generate_standalone_html(data: dict) -> str:
-    """Generate standalone HTML with embedded data."""
+def generate_standalone_html(data: dict, view_name: str = "day", view_label: str = "Today", ranges: list = None) -> str:
+    """Generate standalone HTML with embedded data and navigation."""
+
+    # Build navigation tabs
+    if ranges:
+        nav_items = []
+        for r in ranges:
+            active = "active" if r["name"] == view_name else ""
+            nav_items.append(f'<a href="recap-{r["name"]}.html" class="nav-tab {active}">{r["label"]}</a>')
+        nav_html = f'<div class="nav-tabs">{"".join(nav_items)}</div>'
+    else:
+        nav_html = ""
 
     # Build project rows with expandable details
     project_details = data.get("project_details", {})
@@ -134,7 +144,7 @@ def generate_standalone_html(data: dict) -> str:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Recap - {data["date"]}</title>
+    <title>{view_label} Recap - {data["date"]}</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -145,6 +155,28 @@ def generate_standalone_html(data: dict) -> str:
             min-height: 100vh;
         }}
         .container {{ max-width: 600px; margin: 0 auto; }}
+        .nav-tabs {{
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }}
+        .nav-tab {{
+            padding: 8px 16px;
+            background: #1e293b;
+            border-radius: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }}
+        .nav-tab:hover {{
+            background: #334155;
+            color: #e2e8f0;
+        }}
+        .nav-tab.active {{
+            background: #3b82f6;
+            color: #fff;
+        }}
         h1 {{ font-size: 1.25rem; font-weight: 500; color: #94a3b8; margin-bottom: 8px; }}
         .date {{ font-size: 2rem; font-weight: 700; margin-bottom: 32px; }}
         .section {{
@@ -290,7 +322,8 @@ def generate_standalone_html(data: dict) -> str:
 </head>
 <body>
     <div class="container">
-        <h1>Daily Recap</h1>
+        {nav_html}
+        <h1>{view_label} Recap</h1>
         <div class="date">{data["date"]}</div>
 
         <div class="explainer">
@@ -363,28 +396,64 @@ def main():
     parser = argparse.ArgumentParser(description="Generate simple dashboard")
     parser.add_argument("--hours", type=int, default=24, help="Hours to look back")
     parser.add_argument("--open", action="store_true", help="Open in browser")
+    parser.add_argument("--all", action="store_true", help="Generate all views (day/week/month)")
 
     args = parser.parse_args()
 
-    print("Generating recap...")
-    data = generate_recap(args.hours)
+    # Define time ranges
+    ranges = [
+        {"name": "day", "hours": 24, "label": "Today"},
+        {"name": "week", "hours": 168, "label": "This Week"},
+        {"name": "month", "hours": 720, "label": "This Month"},
+    ]
 
-    # Save JSON (for reference)
-    json_file = Path(__file__).parent / "simple-data.json"
-    with open(json_file, 'w') as f:
-        json.dump(data, f, indent=2)
+    if args.all:
+        print("Generating all recap views...")
+        for r in ranges:
+            data = generate_recap(r["hours"])
+            html = generate_standalone_html(data, r["name"], r["label"], ranges)
+            html_file = Path(__file__).parent / f"recap-{r['name']}.html"
+            with open(html_file, 'w') as f:
+                f.write(html)
+            print(f"  {r['label']}: {data['total_activities']} activities")
 
-    # Generate standalone HTML
-    html = generate_standalone_html(data)
-    html_file = Path(__file__).parent / "recap.html"
-    with open(html_file, 'w') as f:
-        f.write(html)
+        # Also create recap.html as alias to day view
+        day_data = generate_recap(24)
+        html = generate_standalone_html(day_data, "day", "Today", ranges)
+        html_file = Path(__file__).parent / "recap.html"
+        with open(html_file, 'w') as f:
+            f.write(html)
 
-    print(f"  {data['total_activities']} activities across {len(data['projects'])} projects")
+        if args.open:
+            webbrowser.open(f"file://{Path(__file__).parent / 'recap-day.html'}")
+            print("Opened in browser")
+    else:
+        print("Generating recap...")
+        data = generate_recap(args.hours)
 
-    if args.open:
-        webbrowser.open(f"file://{html_file}")
-        print("Opened in browser")
+        # Save JSON (for reference)
+        json_file = Path(__file__).parent / "simple-data.json"
+        with open(json_file, 'w') as f:
+            json.dump(data, f, indent=2)
+
+        # Determine which view based on hours
+        view_name = "day"
+        view_label = "Today"
+        if args.hours >= 168:
+            view_name = "week" if args.hours < 720 else "month"
+            view_label = "This Week" if args.hours < 720 else "This Month"
+
+        # Generate standalone HTML
+        html = generate_standalone_html(data, view_name, view_label, ranges)
+        html_file = Path(__file__).parent / "recap.html"
+        with open(html_file, 'w') as f:
+            f.write(html)
+
+        print(f"  {data['total_activities']} activities across {len(data['projects'])} projects")
+
+        if args.open:
+            webbrowser.open(f"file://{html_file}")
+            print("Opened in browser")
 
 
 if __name__ == "__main__":

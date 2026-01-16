@@ -472,20 +472,19 @@ def history(date_str: str):
 
 
 def weekly_wins():
-    """Show all wins for the current week (Monday to today)."""
+    """Show all wins for the past 2 weeks."""
     data = load_daily_data()
     today = datetime.now()
 
-    # Find Monday of this week
-    days_since_monday = today.weekday()  # Monday=0, Sunday=6
-    monday = today - timedelta(days=days_since_monday)
+    # Go back 2 weeks (14 days)
+    start_date = today - timedelta(days=13)
 
     print(f"\n{'='*50}")
-    print(f"  WEEKLY WINS: Week of {monday.strftime('%B %d, %Y')}")
+    print(f"  WINS: {start_date.strftime('%b %d')} - {today.strftime('%b %d, %Y')}")
     print(f"{'='*50}\n")
 
     all_wins = []
-    current = monday
+    current = start_date
 
     while current <= today:
         date_str = current.strftime("%Y-%m-%d")
@@ -493,36 +492,44 @@ def weekly_wins():
 
         if entry and entry.get("wins"):
             day_name = current.strftime("%A")
+            week_label = "This Week" if (today - current).days < 7 else "Last Week"
             for win in entry["wins"]:
                 all_wins.append({
                     "date": date_str,
                     "day": day_name,
+                    "week": week_label,
                     "win": win
                 })
 
         current += timedelta(days=1)
 
     if all_wins:
-        # Group by day for display
-        current_day = None
+        # Group by week then day for display
+        current_week = None
+        current_date = None
         for item in all_wins:
-            if item["day"] != current_day:
-                current_day = item["day"]
-                print(f"  {current_day} ({item['date']}):")
+            if item["week"] != current_week:
+                current_week = item["week"]
+                print(f"\n  --- {current_week} ---")
+                current_date = None
+
+            if item["date"] != current_date:
+                current_date = item["date"]
+                print(f"\n  {item['day']} ({item['date']}):")
 
             print(f"    - {item['win']}")
 
-        print(f"\n  Total: {len(all_wins)} wins this week")
+        print(f"\n  Total: {len(all_wins)} wins over 2 weeks")
 
         # Generate a summary for copying
         print(f"\n{'='*50}")
         print("  COPY-PASTE SUMMARY:")
         print(f"{'='*50}")
-        print(f"\nWins for week of {monday.strftime('%B %d')}:\n")
+        print(f"\nWins ({start_date.strftime('%b %d')} - {today.strftime('%b %d')}):\n")
         for item in all_wins:
             print(f"- {item['win']}")
     else:
-        print("  No wins logged this week yet.")
+        print("  No wins logged in the past 2 weeks.")
         print("  Add wins with: daily.py win \"Your accomplishment\"")
 
     print()
