@@ -408,6 +408,7 @@ def main():
         {"name": "day", "hours": 24, "label": "Today"},
         {"name": "week", "hours": 168, "label": "This Week"},
         {"name": "month", "hours": 720, "label": "This Month"},
+        {"name": "6month", "hours": 4320, "label": "6 Months"},
     ]
 
     if args.all:
