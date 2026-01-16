@@ -367,6 +367,10 @@ def get_session_summary(lookback_hours: int = 24) -> Dict[str, Any]:
     since = datetime.now() - timedelta(hours=lookback_hours)
     sessions = find_session_files(since)
 
+    # Load projects config for consistent naming
+    _, projects_config = load_config()
+    projects = projects_config.get("projects", [])
+
     summary = {
         'total_sessions': len(sessions),
         'total_messages': 0,
@@ -376,13 +380,19 @@ def get_session_summary(lookback_hours: int = 24) -> Dict[str, Any]:
         'sessions_by_project': {},
     }
 
+    # Import map_claude_project_name for consistent naming
+    from agent.simple_recap import map_claude_project_name
+
     for session in sessions:
         session_data = parse_session_file(session['path'], since)
 
         if session_data['message_count'] == 0:
             continue
 
-        project_name = os.path.basename(session['project_path'])
+        # Use raw encoded folder name for project matching (more reliable)
+        project_name = map_claude_project_name(session['project_encoded'], projects)
+        if project_name is None:  # Excluded project
+            continue
         summary['total_messages'] += session_data['message_count']
         summary['total_files_edited'] += len(session_data['files_edited'])
         summary['projects_active'].add(project_name)
@@ -390,11 +400,23 @@ def get_session_summary(lookback_hours: int = 24) -> Dict[str, Any]:
         for tool, count in session_data['tools_used'].items():
             summary['tools_breakdown'][tool] += count
 
-        summary['sessions_by_project'][project_name] = {
-            'messages': session_data['message_count'],
-            'files_edited': len(session_data['files_edited']),
-            'duration_minutes': session_data.get('duration_minutes'),
-        }
+        # Aggregate into existing entry or create new one
+        if project_name not in summary['sessions_by_project']:
+            summary['sessions_by_project'][project_name] = {
+                'messages': 0,
+                'files_edited': [],
+                'duration_minutes': None,
+                'session_count': 0,
+            }
+
+        proj_data = summary['sessions_by_project'][project_name]
+        proj_data['messages'] += session_data['message_count']
+        proj_data['files_edited'].extend(session_data['files_edited'])  # Store actual files, not count
+        proj_data['session_count'] += 1
+        if session_data.get('duration_minutes'):
+            if proj_data['duration_minutes'] is None:
+                proj_data['duration_minutes'] = 0
+            proj_data['duration_minutes'] += session_data['duration_minutes']
 
     summary['projects_active'] = list(summary['projects_active'])
     summary['tools_breakdown'] = dict(summary['tools_breakdown'])

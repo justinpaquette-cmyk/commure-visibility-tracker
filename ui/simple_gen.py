@@ -15,13 +15,50 @@ from agent.simple_recap import generate_recap
 def generate_standalone_html(data: dict) -> str:
     """Generate standalone HTML with embedded data."""
 
-    # Build project rows
+    # Build project rows with expandable details
+    project_details = data.get("project_details", {})
     project_rows = ""
-    for p in data["projects"][:8]:
-        project_rows += f'''
-            <div class="project">
-                <span class="project-name">{p["name"]}</span>
-                <span class="project-stats">{p["activities"]} activities, {p["files"]} files</span>
+    for p in data["projects"]:
+        proj_name = p["name"]
+        details = project_details.get(proj_name, {})
+        sessions = details.get("sessions", [])
+
+        # Build session details HTML
+        sessions_html = ""
+        if sessions:
+            for s in sessions:
+                task = s.get("task", "")[:200]
+                if len(s.get("task", "")) > 200:
+                    task += "..."
+                files = s.get("files", [])
+                time_str = s.get("time", "")
+                time_html = f'<span class="session-time">{time_str}</span>' if time_str else ""
+                files_str = f'<div class="session-files">{", ".join(files)}</div>' if files else ""
+                sessions_html += f'''
+                    <div class="session-item">
+                        <div class="session-task">{time_html}{task}</div>
+                        {files_str}
+                    </div>'''
+
+        # Wrap in expandable container if there are details
+        if sessions_html:
+            project_rows += f'''
+            <details class="project-wrapper">
+                <summary class="project">
+                    <span class="project-name">{proj_name}<span class="expand-hint">(click to expand)</span></span>
+                    <span class="project-stats">{p["activities"]} activities, {p["files"]} files</span>
+                </summary>
+                <div class="project-details">
+                    {sessions_html}
+                </div>
+            </details>'''
+        else:
+            project_rows += f'''
+            <div class="project-wrapper">
+                <div class="project">
+                    <span class="project-name">{proj_name}</span>
+                    <span class="project-stats">{p["activities"]} activities, {p["files"]} files</span>
+                </div>
             </div>'''
 
     # Build wins
@@ -51,6 +88,15 @@ def generate_standalone_html(data: dict) -> str:
         <div class="section">
             <div class="section-title">Today's Intent</div>
             <div class="intent">{data["daily"]["intent"]}</div>
+        </div>'''
+
+    # Auto-generated summary
+    summary_html = ""
+    if data.get("summary"):
+        summary_html = f'''
+        <div class="section">
+            <div class="section-title">What I Did</div>
+            <div class="summary">{data["summary"]}</div>
         </div>'''
 
     # Team distribution bar
@@ -115,20 +161,54 @@ def generate_standalone_html(data: dict) -> str:
             margin-bottom: 12px;
         }}
         .intent {{ font-size: 1.1rem; color: #f8fafc; line-height: 1.5; }}
+        .summary {{ font-size: 1rem; color: #cbd5e1; line-height: 1.6; }}
         .stats {{ display: flex; gap: 32px; }}
         .stat {{ text-align: center; }}
         .stat-value {{ font-size: 2.5rem; font-weight: 700; color: #3b82f6; }}
         .stat-label {{ font-size: 0.75rem; color: #64748b; text-transform: uppercase; }}
-        .project-list {{ display: flex; flex-direction: column; gap: 8px; }}
+        .project-list {{ }}
+        .project-wrapper {{
+            border-bottom: 1px solid #334155;
+            padding: 10px 0;
+        }}
+        .project-wrapper:last-child {{ border-bottom: none; }}
+        details.project-wrapper {{ cursor: pointer; }}
+        details.project-wrapper > summary {{ list-style: none; }}
+        details.project-wrapper > summary::-webkit-details-marker {{ display: none; }}
         .project {{
             display: flex;
             justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #334155;
+            align-items: center;
         }}
-        .project:last-child {{ border-bottom: none; }}
         .project-name {{ font-weight: 500; }}
         .project-stats {{ color: #64748b; font-size: 0.875rem; }}
+        .expand-hint {{ color: #64748b; font-size: 0.7rem; margin-left: 8px; }}
+        details.project-wrapper[open] .expand-hint {{ display: none; }}
+        .project-details {{
+            padding: 12px 0 4px 12px;
+            margin-top: 8px;
+            border-left: 2px solid #334155;
+        }}
+        .session-item {{
+            padding: 8px 0;
+            border-bottom: 1px solid #1e293b;
+        }}
+        .session-item:last-child {{ border-bottom: none; }}
+        .session-task {{
+            font-size: 0.85rem;
+            color: #e2e8f0;
+            line-height: 1.4;
+        }}
+        .session-time {{
+            color: #64748b;
+            font-size: 0.75rem;
+            margin-right: 8px;
+        }}
+        .session-files {{
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 4px;
+        }}
         .wins-list, .blockers-list {{ display: flex; flex-direction: column; gap: 8px; }}
         .win {{
             padding: 8px 12px;
@@ -237,6 +317,8 @@ def generate_standalone_html(data: dict) -> str:
         </div>
 
         {intent_html}
+
+        {summary_html}
 
         <div class="section">
             <div class="stats">

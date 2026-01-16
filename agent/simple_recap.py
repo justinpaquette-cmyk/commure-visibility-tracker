@@ -12,9 +12,157 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from collectors.claude import collect_activities as collect_claude, get_session_summary
+from collectors.claude import get_session_summary
 from collectors.git import collect_activities as collect_git
 from collectors.filesystem import collect_activities as collect_fs
+
+# Import summary generator (lazy to avoid circular imports)
+def get_day_summary(date_str: str) -> str:
+    try:
+        from cli.daily import generate_day_summary
+        return generate_day_summary(date_str)
+    except:
+        return ""
+
+
+def get_project_details(hours: int = 24) -> dict:
+    """Get detailed activity breakdown by project.
+
+    Uses the same project naming logic as the main recap for consistency.
+    """
+    from pathlib import Path
+    import os
+
+    details = {}
+    claude_projects_dir = Path.home() / ".claude" / "projects"
+    cutoff = datetime.now() - timedelta(hours=hours)
+    projects_config = load_projects()
+
+    if not claude_projects_dir.exists():
+        return details
+
+    for jsonl in claude_projects_dir.glob("*/*.jsonl"):
+        if "subagent" in str(jsonl) or "agent-" in jsonl.name:
+            continue
+        try:
+            # Parse session to check for recent activity
+            session_info = parse_session_for_details(jsonl, cutoff)
+
+            # Skip if no recent activity in this session
+            if not session_info.get("has_recent_activity") and not session_info.get("first_message"):
+                # Fallback: check file modification time
+                mtime = datetime.fromtimestamp(jsonl.stat().st_mtime)
+                if mtime < cutoff:
+                    continue
+
+            # Use latest message time or file mtime
+            if session_info.get("latest_time"):
+                mtime = session_info["latest_time"]
+                if mtime.tzinfo:
+                    mtime = mtime.replace(tzinfo=None)
+            else:
+                mtime = datetime.fromtimestamp(jsonl.stat().st_mtime)
+
+            # Extract folder name for matching - use same logic as main recap
+            proj_folder = jsonl.parent.name
+            folder_lower = proj_folder.lower()
+
+            # Exclude specific projects first
+            excluded_keywords = ["book-ai-covenant", "ai-covenant", "covenant"]
+            if any(kw in folder_lower for kw in excluded_keywords):
+                continue
+
+            # Use map_claude_project_name for consistent naming with main recap
+            clean_name = map_claude_project_name(proj_folder, projects_config)
+            if clean_name is None:  # Excluded project
+                continue
+
+            # Skip if no first message
+            if not session_info.get("first_message"):
+                continue
+
+            if clean_name not in details:
+                details[clean_name] = {"sessions": [], "files": set(), "commits": []}
+
+            details[clean_name]["sessions"].append({
+                "task": session_info.get("first_message", ""),
+                "files": session_info.get("files_edited", []),
+                "time": mtime.strftime("%H:%M")
+            })
+            details[clean_name]["files"].update(session_info.get("files_edited", []))
+
+        except Exception:
+            continue
+
+    # Convert sets to lists for JSON
+    for proj in details:
+        details[proj]["files"] = list(details[proj]["files"])
+
+    return details
+
+
+def parse_session_for_details(jsonl_path, cutoff: datetime = None) -> dict:
+    """Parse Claude session for task and files, optionally filtering by time."""
+    import os
+    from dateutil import parser as date_parser
+
+    info = {"first_message": None, "files_edited": [], "has_recent_activity": False, "latest_time": None}
+
+    try:
+        with open(jsonl_path, 'r') as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                # Check timestamp if filtering by time
+                timestamp = entry.get("timestamp")
+                if timestamp and cutoff:
+                    try:
+                        msg_time = date_parser.parse(timestamp)
+                        # Make cutoff timezone-aware if msg_time is
+                        if msg_time.tzinfo and cutoff.tzinfo is None:
+                            from datetime import timezone
+                            cutoff = cutoff.replace(tzinfo=timezone.utc)
+                        if msg_time >= cutoff:
+                            info["has_recent_activity"] = True
+                            if not info["latest_time"] or msg_time > info["latest_time"]:
+                                info["latest_time"] = msg_time
+                    except:
+                        pass
+
+                # Get first user message
+                if entry.get("type") == "user" and not info["first_message"]:
+                    msg = entry.get("message", {})
+                    content = msg.get("content", "")
+                    if isinstance(content, str):
+                        info["first_message"] = content.strip()
+                    elif isinstance(content, list):
+                        for c in content:
+                            if isinstance(c, dict) and c.get("type") == "text":
+                                info["first_message"] = c.get("text", "").strip()
+                                break
+
+                # Look for file edits
+                msg = entry.get("message", {})
+                content = msg.get("content", [])
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "tool_use":
+                            tool_name = block.get("name", "")
+                            tool_input = block.get("input", {})
+
+                            if tool_name in ["Edit", "Write"]:
+                                file_path = tool_input.get("file_path", "")
+                                if file_path:
+                                    basename = os.path.basename(file_path)
+                                    if basename not in info["files_edited"]:
+                                        info["files_edited"].append(basename)
+    except Exception:
+        pass
+
+    return info
 
 
 def load_projects() -> list:
@@ -107,35 +255,94 @@ def extract_folder_group(filepath: str) -> str:
     return "Other"
 
 
-def map_claude_project_name(short_name: str, projects: list) -> str:
-    """Map Claude's short project names to full project names.
+def map_claude_project_name(encoded_name: str, projects: list) -> str:
+    """Map Claude's encoded folder names to full project names.
 
-    Claude stores projects as encoded folder names like 'tracker', 'pk', 'generator'.
-    We match these to projects.json by checking if the short name appears in the folder path.
+    Claude stores projects as encoded folder names like:
+    - '-Users-justinpaquette-Documents-sales-eng-projects-v2-client-folder-Tenet-...'
+    - 'tracker' (short name from sessions_by_project)
+
+    We decode these and match against projects.json folder paths.
     """
-    if not short_name:
-        return "Other"
+    if not encoded_name:
+        return "Misc"
 
-    short_lower = short_name.lower()
+    encoded_lower = encoded_name.lower()
+
+    # Exclude specific projects
+    excluded_projects = ["book-ai-covenant", "ai-covenant", "covenant"]
+    if any(exc in encoded_lower for exc in excluded_projects):
+        return None  # Will be filtered out
+
+    # Filter out generic/meaningless names
+    generic_names = ["project", "folder", "test", "tmp", "temp", "untitled", "wins", "private-tmp", "task"]
+    if encoded_lower.strip("-") in generic_names:
+        return "Misc"
+
+    # Also check if the path ends with a generic name
+    path_parts = encoded_lower.strip("-").split("-")
+    if path_parts and path_parts[-1] in generic_names:
+        return "Misc"
+
+    # Decode the path: Claude encodes paths by replacing / with -
+    # E.g., "-Users-justinpaquette-Documents-..." -> "/Users/justinpaquette/Documents/..."
+    if encoded_name.startswith("-"):
+        decoded_path = "/" + encoded_name[1:].replace("-", "/")
+    else:
+        decoded_path = encoded_name.replace("-", "/")
+
+    decoded_lower = decoded_path.lower()
+
+    # Try to match against project folder paths
+    best_match = None
+    best_score = 0
 
     for project in projects:
-        folder = project.get("folder_path", "").lower()
-        name_lower = project.get("name", "").lower()
+        folder = project.get("folder_path", "")
+        folder_lower = folder.lower()
 
-        # Check if short name matches end of folder path
-        if folder.endswith(short_lower) or f"/{short_lower}/" in folder or f"-{short_lower}" in folder:
-            return project["name"]
-
-        # Check if short name is in project name
-        if short_lower in name_lower.replace(" ", "").lower():
-            return project["name"]
+        # Direct match - decoded path starts with or contains project folder
+        if folder_lower and (
+            decoded_lower.startswith(folder_lower) or
+            folder_lower in decoded_lower
+        ):
+            score = len(folder_lower)
+            if score > best_score:
+                best_score = score
+                best_match = project["name"]
 
         # Check aliases
         for alias in project.get("aliases", []):
-            if short_lower == alias.lower() or short_lower in alias.lower():
-                return project["name"]
+            alias_lower = alias.lower()
+            if alias_lower in decoded_lower or alias_lower in encoded_lower:
+                score = len(alias_lower) + 100  # Boost alias matches
+                if score > best_score:
+                    best_score = score
+                    best_match = project["name"]
 
-    return short_name  # Return original if no match
+    if best_match:
+        return best_match
+
+    # No match - extract a meaningful name from the path
+    # Look for recognizable folder markers
+    markers = ["client-folder/", "client-agnostic/", "productivity/"]
+    for marker in markers:
+        if marker in decoded_lower:
+            idx = decoded_lower.find(marker) + len(marker)
+            rest = decoded_path[idx:]
+            # Get first folder after marker
+            parts = rest.split("/")
+            for part in parts:
+                if part and len(part) > 2:
+                    return part.replace("-", " ").title()
+
+    # Last resort: use last meaningful folder from path
+    parts = decoded_path.rstrip("/").split("/")
+    for part in reversed(parts):
+        if part and len(part) > 3 and part.lower() not in ["users", "documents", "justinpaquette"]:
+            return part.replace("-", " ").title()
+
+    return "Misc"
 
 
 def calculate_team_distribution(by_project: dict, projects: list) -> dict:
@@ -152,26 +359,24 @@ def calculate_team_distribution(by_project: dict, projects: list) -> dict:
 
 
 def collect_all(hours: int = 24) -> list:
-    """Collect all activities. Simple."""
-    activities = []
+    """Collect all activities. Simple.
 
-    # Claude sessions
-    try:
-        activities.extend(collect_claude(hours))
-    except Exception as e:
-        print(f"  (claude collector: {e})")
+    Note: Claude sessions are NOT collected here - they come from
+    get_session_summary() to avoid double-counting.
+    """
+    activities = []
 
     # Git commits
     try:
         activities.extend(collect_git(hours))
-    except Exception as e:
-        print(f"  (git collector: {e})")
+    except Exception:
+        pass
 
     # File changes
     try:
         activities.extend(collect_fs(hours))
-    except Exception as e:
-        print(f"  (filesystem collector: {e})")
+    except Exception:
+        pass
 
     return activities
 
@@ -186,8 +391,8 @@ def generate_recap(hours: int = 24) -> dict:
     claude_summary = {}
     try:
         claude_summary = get_session_summary(hours)
-    except Exception as e:
-        print(f"  (claude summary: {e})")
+    except Exception:
+        pass
 
     # Group by project
     by_project = defaultdict(lambda: {"count": 0, "files": set(), "messages": 0})
@@ -197,16 +402,15 @@ def generate_recap(hours: int = 24) -> dict:
     for short_name, stats in sessions_by_project.items():
         # Map short Claude project name to full project name
         proj_name = map_claude_project_name(short_name, projects)
+        if proj_name is None:  # Excluded project
+            continue
         by_project[proj_name]["count"] += 1
         by_project[proj_name]["messages"] += stats.get("messages", 0)
         by_project[proj_name]["files"].update(stats.get("files_edited", []) if isinstance(stats.get("files_edited"), list) else [])
 
     # Then add git/filesystem activities - use pre-determined project names
+    # (Claude activities are not in this list - they come from sessions_by_project above)
     for a in activities:
-        # Skip claude activities (already counted above)
-        if hasattr(a, 'source') and a.source.value == 'claude':
-            continue
-
         # Use the project name already determined by the collector
         project_name = None
         if hasattr(a, 'raw_data'):
@@ -254,10 +458,21 @@ def generate_recap(hours: int = 24) -> dict:
     # Calculate team distribution
     team_dist = calculate_team_distribution(by_project, projects)
 
+    # Generate day summary and project details
+    today = datetime.now().strftime("%Y-%m-%d")
+    day_summary = get_day_summary(today)
+    project_details = get_project_details(hours)
+
+    # Calculate total activities (git+fs + claude sessions)
+    claude_session_count = len(sessions_by_project)
+    total_activities = len(activities) + claude_session_count
+
     return {
-        "date": datetime.now().strftime("%Y-%m-%d"),
+        "date": today,
         "generated_at": datetime.now().isoformat(),
-        "total_activities": len(activities),
+        "summary": day_summary,
+        "project_details": project_details,
+        "total_activities": total_activities,
         "total_files": sum(len(data["files"]) for data in by_project.values()),
         "projects": project_summary,
         "claude": {
@@ -329,7 +544,6 @@ def main():
 
     args = parser.parse_args()
 
-    print("Collecting activities...")
     data = generate_recap(args.hours)
 
     if args.json:
