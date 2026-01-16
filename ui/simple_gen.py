@@ -32,6 +32,8 @@ def generate_standalone_html(data: dict, view_name: str = "day", view_label: str
         proj_name = p["name"]
         details = project_details.get(proj_name, {})
         sessions = details.get("sessions", [])
+        last_active = p.get("last_active", "")
+        last_active_html = f'<span class="last-active">Last: {last_active}</span>' if last_active else ""
 
         # Build session details HTML
         sessions_html = ""
@@ -56,7 +58,7 @@ def generate_standalone_html(data: dict, view_name: str = "day", view_label: str
             <details class="project-wrapper">
                 <summary class="project">
                     <span class="project-name">{proj_name}<span class="expand-hint">(click to expand)</span></span>
-                    <span class="project-stats">{p["activities"]} activities, {p["files"]} files</span>
+                    <span class="project-stats">{p["activities"]} activities, {p["files"]} files {last_active_html}</span>
                 </summary>
                 <div class="project-details">
                     {sessions_html}
@@ -67,7 +69,7 @@ def generate_standalone_html(data: dict, view_name: str = "day", view_label: str
             <div class="project-wrapper">
                 <div class="project">
                     <span class="project-name">{proj_name}</span>
-                    <span class="project-stats">{p["activities"]} activities, {p["files"]} files</span>
+                    <span class="project-stats">{p["activities"]} activities, {p["files"]} files {last_active_html}</span>
                 </div>
             </div>'''
 
@@ -214,6 +216,7 @@ def generate_standalone_html(data: dict, view_name: str = "day", view_label: str
         }}
         .project-name {{ font-weight: 500; }}
         .project-stats {{ color: #64748b; font-size: 0.875rem; }}
+        .last-active {{ color: #94a3b8; font-size: 0.75rem; margin-left: 12px; font-style: italic; }}
         .expand-hint {{ color: #64748b; font-size: 0.7rem; margin-left: 8px; }}
         details.project-wrapper[open] .expand-hint {{ display: none; }}
         .project-details {{

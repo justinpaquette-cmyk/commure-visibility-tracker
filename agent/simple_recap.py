@@ -258,6 +258,36 @@ def get_day_summary(date_str: str) -> str:
         return ""
 
 
+def generate_range_summary(hours: int, projects: list) -> str:
+    """Generate a summary based on the time range and projects worked on."""
+    if not projects:
+        return ""
+
+    # Determine time label
+    if hours <= 24:
+        time_label = "Today"
+    elif hours <= 168:
+        time_label = "This week"
+    else:
+        time_label = "This month"
+
+    # Count unique projects (excluding Misc)
+    unique_projects = [p["name"] for p in projects if p["name"] != "Misc"]
+
+    if not unique_projects:
+        return f"{time_label}, worked on various tasks."
+
+    # Build natural summary
+    if len(unique_projects) == 1:
+        return f"{time_label}, focused on {unique_projects[0]}."
+    elif len(unique_projects) == 2:
+        return f"{time_label}, worked on {unique_projects[0]} and {unique_projects[1]}."
+    else:
+        main_projects = unique_projects[:2]
+        others = len(unique_projects) - 2
+        return f"{time_label}, worked on {main_projects[0]}, {main_projects[1]}, and {others} other project{'s' if others > 1 else ''}."
+
+
 def get_project_details(hours: int = 24) -> dict:
     """Get detailed activity breakdown by project."""
     import os
@@ -395,6 +425,60 @@ def load_daily_entry(date: str = None) -> dict:
     return {}
 
 
+def load_wins_for_range(hours: int = 24) -> list:
+    """Load all wins within the time range."""
+    daily_file = Path(__file__).parent.parent / "data" / "daily.json"
+    if not daily_file.exists():
+        return []
+
+    with open(daily_file) as f:
+        data = json.load(f)
+
+    cutoff = datetime.now() - timedelta(hours=hours)
+    all_wins = []
+
+    for entry in data.get("entries", []):
+        try:
+            entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
+            if entry_date >= cutoff:
+                for win in entry.get("wins", []):
+                    all_wins.append({
+                        "date": entry["date"],
+                        "text": win
+                    })
+        except:
+            continue
+
+    return all_wins
+
+
+def load_blockers_for_range(hours: int = 24) -> list:
+    """Load all blockers within the time range."""
+    daily_file = Path(__file__).parent.parent / "data" / "daily.json"
+    if not daily_file.exists():
+        return []
+
+    with open(daily_file) as f:
+        data = json.load(f)
+
+    cutoff = datetime.now() - timedelta(hours=hours)
+    all_blockers = []
+
+    for entry in data.get("entries", []):
+        try:
+            entry_date = datetime.strptime(entry["date"], "%Y-%m-%d")
+            if entry_date >= cutoff:
+                for blocker in entry.get("blockers", []):
+                    all_blockers.append({
+                        "date": entry["date"],
+                        "text": blocker
+                    })
+        except:
+            continue
+
+    return all_blockers
+
+
 def match_path_to_project(filepath: str) -> str:
     """Match a file path to a project name.
 
@@ -497,6 +581,10 @@ def generate_recap(hours: int = 24) -> dict:
     activities = collect_all(hours)
     daily = load_daily_entry()
 
+    # Load wins and blockers for the time range
+    wins_data = load_wins_for_range(hours)
+    blockers_data = load_blockers_for_range(hours)
+
     # Get Claude session summary
     claude_summary = {}
     try:
@@ -504,8 +592,8 @@ def generate_recap(hours: int = 24) -> dict:
     except Exception:
         pass
 
-    # Group by project
-    by_project = defaultdict(lambda: {"count": 0, "files": set(), "messages": 0})
+    # Group by project - track last activity time
+    by_project = defaultdict(lambda: {"count": 0, "files": set(), "messages": 0, "last_active": None})
 
     # Process Claude sessions
     sessions_by_project = claude_summary.get("sessions_by_project", {})
@@ -519,6 +607,9 @@ def generate_recap(hours: int = 24) -> dict:
         files = stats.get("files_edited", [])
         if isinstance(files, list):
             by_project[proj_name]["files"].update(files)
+        # Claude sessions are recent by definition (within hours range)
+        if by_project[proj_name]["last_active"] is None:
+            by_project[proj_name]["last_active"] = datetime.now()
 
     # Process git/filesystem activities
     for a in activities:
@@ -548,33 +639,54 @@ def generate_recap(hours: int = 24) -> dict:
         by_project[project_name]["count"] += 1
         by_project[project_name]["files"].update(files)
 
+        # Track last activity time
+        if hasattr(a, 'timestamp') and a.timestamp:
+            current_last = by_project[project_name]["last_active"]
+            if current_last is None or a.timestamp > current_last:
+                by_project[project_name]["last_active"] = a.timestamp
+
     # Convert to serializable
     project_summary = []
     for name, data in sorted(by_project.items(), key=lambda x: -x[1]["count"]):
         if data["count"] > 0:
+            last_active = data.get("last_active")
+            last_active_str = None
+            if last_active:
+                if isinstance(last_active, datetime):
+                    last_active_str = last_active.strftime("%b %d")
+                else:
+                    last_active_str = str(last_active)[:10]
+
             project_summary.append({
                 "name": name if name != "Other" else "Misc",
                 "activities": data["count"],
                 "files": len(data["files"]),
-                "messages": data.get("messages", 0)
+                "messages": data.get("messages", 0),
+                "last_active": last_active_str
             })
 
     # Calculate team distribution
     team_dist = calculate_team_distribution(by_project)
 
-    # Generate day summary and project details
+    # Generate summary and project details
     today = datetime.now().strftime("%Y-%m-%d")
-    day_summary = get_day_summary(today)
     project_details = get_project_details(hours)
+
+    # Generate range-appropriate summary
+    range_summary = generate_range_summary(hours, project_summary)
 
     # Calculate total activities
     claude_session_count = len(sessions_by_project)
     total_activities = len(activities) + claude_session_count
 
+    # Extract win/blocker text for the output
+    wins_list = [w["text"] for w in wins_data]
+    blockers_list = [b["text"] for b in blockers_data]
+
     return {
         "date": today,
         "generated_at": datetime.now().isoformat(),
-        "summary": day_summary,
+        "summary": range_summary,
         "project_details": project_details,
         "total_activities": total_activities,
         "total_files": sum(len(data["files"]) for data in by_project.values()),
@@ -588,8 +700,8 @@ def generate_recap(hours: int = 24) -> dict:
         "team": team_dist,
         "daily": {
             "intent": daily.get("intent", ""),
-            "wins": daily.get("wins", []),
-            "blockers": daily.get("blockers", [])
+            "wins": wins_list,
+            "blockers": blockers_list
         }
     }
 
