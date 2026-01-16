@@ -7,7 +7,11 @@ __pycache__/
 
 # Data files (contain personal activity)
 data/
+
+# Generated dashboard files
+ui/recap*.html
 ui/recap-data.json
+ui/simple-data.json
 
 # Config with personal paths (template provided)
 config/projects.json
